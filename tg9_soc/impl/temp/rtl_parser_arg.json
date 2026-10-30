@@ -1,0 +1,25 @@
+{
+ "Device" : "GW1NR-9C",
+ "Files" : [
+  {
+   "Path" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_memory_interface_hs/psram_memory_interface_hs.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/top.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_wrapper.v",
+   "Type" : "verilog"
+  }
+ ],
+ "IncludePath" : [
+
+ ],
+ "LoopLimit" : 2000,
+ "ResultFile" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/impl/temp/rtl_parser.result",
+ "Top" : "",
+ "VerilogStd" : "verilog_2001",
+ "VhdlStd" : "vhdl_93"
+}

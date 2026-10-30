@@ -1,0 +1,9 @@
+GowinSynthesis start
+Running parser ...
+Analyzing Verilog file '/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_memory_interface_hs/psram_memory_interface_hs.v'
+Analyzing Verilog file '/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/top.v'
+Analyzing Verilog file '/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_wrapper.v'
+ERROR (EX3872) : 'clk' is not declared("/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_wrapper.v":43)
+ERROR (EX3928) : Module 'top' is ignored due to previous errors("/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_wrapper.v":102)
+Verilog file '/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_wrapper.v' ignored due to errors
+GowinSynthesis finish

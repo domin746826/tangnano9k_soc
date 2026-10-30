@@ -1,0 +1,20 @@
+[
+ {
+  "InstFile" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/top.v",
+  "InstLine" : 1,
+  "InstName" : "top",
+  "ModuleFile" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/top.v",
+  "ModuleLine" : 1,
+  "ModuleName" : "top",
+  "SubInsts" : [
+   {
+    "InstFile" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/top.v",
+    "InstLine" : 24,
+    "InstName" : "psram_inst",
+    "ModuleFile" : "/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_memory_interface_hs/psram_memory_interface_hs.v",
+    "ModuleLine" : 9,
+    "ModuleName" : "PSRAM_Memory_Interface_HS_Top"
+   }
+  ]
+ }
+]
