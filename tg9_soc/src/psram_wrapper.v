@@ -7,6 +7,8 @@ module top (
     output [0:0] O_psram_reset_n,
     input nrst,
     input clk_psram,
+    output clk_out,
+    input pll_lock,
 
     // interface
     input wire req_valid,
@@ -16,11 +18,8 @@ module top (
 
     // data
     input wire [63:0] write_data,
-    input wire write_valid,
-    output reg write_ready,
     output reg [63:0] read_data,
-    output reg read_valid,
-    output wire read_last
+    output reg read_valid
 );
 
 localparam DOWN = 0;
@@ -29,7 +28,7 @@ localparam READ = 2;
 localparam WRITE = 3;
 reg [1:0] state;
 
-wire pll_lock, rst_n, clk_out, init_calib, rd_data_valid;
+wire rst_n, init_calib, rd_data_valid;
 wire [63:0] rd_data;
 reg [63:0] wr_data;
 reg [20:0] addr;
@@ -38,13 +37,14 @@ reg cmd_en;
 reg [4:0] tclk;
 
 // 18Tclk for 32 burst
+// 32 burst - read/write takes 8 clk cycle
 localparam Tclk_val = 18;
+reg [2:0] rw_clk;
 
-always @(posedge clk or negedge nrst) begin
+always @(posedge clk_out or negedge nrst) begin
 if(!nrst) begin
     state <= DOWN;
     req_ready <= 0;
-    write_ready <= 0;
     read_data <= 64'd0;
     read_valid <= 0;
     wr_data <= 64'd0;
@@ -52,25 +52,55 @@ if(!nrst) begin
     cmd <= 0;
     cmd_en <= 0;
     tclk <= 0;
+    rw_clk <= 0;
 end else begin
+req_ready <= 0;
+if(tclk != 0) begin
+    tclk <= tclk - 1;
+end
 case (state)
     DOWN: begin
         if(init_calib) begin
             state <= READY;
         end
     end READY: begin
-        if(tclk != 0) begin
-            tclk <= tclk - 1;
-        end else begin
+        read_valid <= 0;
+        if(tclk == 0) begin
+            req_ready <= 1;
             if(req_valid) begin
                 tclk <= Tclk_val;
-                
-                cmd <= 1'b0; // read
+                cmd <= req_we; // 0 read 1 write
+                cmd_en <= 1;
+                addr <= req_addr;
+                if(req_we) begin
+                    wr_data <= write_data;
+                    state <= WRITE;
+                end else begin
+                    state <= READ;
+                end
             end
         end
     end READ: begin
+        cmd_en <= 0;
+        if(rd_data_valid) begin
+            read_data <= rd_data;
+            read_valid <= 1;
+            rw_clk <= rw_clk + 1;
+            if(rw_clk == 3'd7) begin
+                state <= READY;
+                rw_clk <= 0;
+            end
+        end
+        
 
     end WRITE: begin
+        cmd_en <= 0;
+        rw_clk <= rw_clk + 1;
+        wr_data <= write_data;
+        if(rw_clk == 3'd6) begin
+            state <= READY;
+            rw_clk <= 0;
+        end
 
     end
 endcase
