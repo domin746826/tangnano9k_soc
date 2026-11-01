@@ -1,14 +1,18 @@
-module top (
-    output [0:0] O_psram_ck,
-    output [0:0] O_psram_ck_n,
-    inout [7:0] IO_psram_dq,
-    inout [0:0] IO_psram_rwds,
-    output [0:0] O_psram_cs_n,
-    output [0:0] O_psram_reset_n,
+// interface
+
+// write/read
+// clk:         _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
+// req_valid:   __-------_______
+// req_ready:   _______------
+// data rd:     _______dddddddd
+// data wr:     __d0___ddddddd
+// addr:        __aaaaaaaaaaaa
+
+module psram_wrapper (
     input nrst,
-    input clk_psram,
-    output clk_out,
-    input pll_lock,
+    input clk,
+    input init_calib,
+    input rd_data_valid,
 
     // interface
     input wire req_valid,
@@ -19,7 +23,11 @@ module top (
     // data
     input wire [63:0] write_data,
     output reg [63:0] read_data,
-    output reg read_valid
+    input wire [63:0] rd_data,
+    output reg [63:0] wr_data,
+    output reg [20:0] addr,
+    output reg cmd,
+    output reg cmd_en
 );
 
 localparam DOWN = 0;
@@ -28,12 +36,7 @@ localparam READ = 2;
 localparam WRITE = 3;
 reg [1:0] state;
 
-wire rst_n, init_calib, rd_data_valid;
-wire [63:0] rd_data;
-reg [63:0] wr_data;
-reg [20:0] addr;
-reg cmd;
-reg cmd_en;
+
 reg [4:0] tclk;
 
 // 18Tclk for 32 burst
@@ -41,12 +44,11 @@ reg [4:0] tclk;
 localparam Tclk_val = 18;
 reg [2:0] rw_clk;
 
-always @(posedge clk_out or negedge nrst) begin
+always @(posedge clk or negedge nrst) begin
 if(!nrst) begin
     state <= DOWN;
     req_ready <= 0;
     read_data <= 64'd0;
-    read_valid <= 0;
     wr_data <= 64'd0;
     addr <= 21'd0;
     cmd <= 0;
@@ -64,27 +66,25 @@ case (state)
             state <= READY;
         end
     end READY: begin
-        read_valid <= 0;
-        if(tclk == 0) begin
-            req_ready <= 1;
-            if(req_valid) begin
-                tclk <= Tclk_val;
-                cmd <= req_we; // 0 read 1 write
-                cmd_en <= 1;
-                addr <= req_addr;
-                if(req_we) begin
-                    wr_data <= write_data;
-                    state <= WRITE;
-                end else begin
-                    state <= READ;
-                end
+        if(tclk == 0 && req_valid) begin
+            tclk <= Tclk_val;
+            cmd <= req_we; // 0 read 1 write
+            cmd_en <= 1;
+            addr <= req_addr;
+            if(req_we) begin
+                req_ready <= 1;
+                wr_data <= write_data;
+                state <= WRITE;
+            end else begin
+                state <= READ;
             end
+        
         end
     end READ: begin
         cmd_en <= 0;
         if(rd_data_valid) begin
+            req_ready <= 1;
             read_data <= rd_data;
-            read_valid <= 1;
             rw_clk <= rw_clk + 1;
             if(rw_clk == 3'd7) begin
                 state <= READY;
@@ -97,9 +97,11 @@ case (state)
         cmd_en <= 0;
         rw_clk <= rw_clk + 1;
         wr_data <= write_data;
+        req_ready <= 1;
         if(rw_clk == 3'd6) begin
             state <= READY;
             rw_clk <= 0;
+            req_ready <= 0;
         end
 
     end
@@ -108,28 +110,6 @@ end
 end
 
 
-
-PSRAM_Memory_Interface_HS_Top psram_inst(
-    .clk(clk_psram), //input clk
-    .memory_clk(clk_psram), //input memory_clk
-    .pll_lock(pll_lock), //input pll_lock
-    .rst_n(nrst), //input rst_n
-    .O_psram_ck(O_psram_ck), //output [1:0] O_psram_ck
-    .O_psram_ck_n(O_psram_ck_n), //output [1:0] O_psram_ck_n
-    .IO_psram_dq(IO_psram_dq), //inout [15:0] IO_psram_dq
-    .IO_psram_rwds(IO_psram_rwds), //inout [1:0] IO_psram_rwds
-    .O_psram_cs_n(O_psram_cs_n), //output [1:0] O_psram_cs_n
-    .O_psram_reset_n(O_psram_reset_n), //output [1:0] O_psram_reset_n
-    .wr_data(wr_data), //input [63:0] wr_data
-    .rd_data(rd_data), //output [63:0] rd_data
-    .rd_data_valid(rd_data_valid), //output rd_data_valid
-    .addr(addr), //input [20:0] addr
-    .cmd(cmd), //input cmd
-    .cmd_en(cmd_en), //input cmd_en
-    .init_calib(init_calib), //output init_calib
-    .clk_out(clk_out), //output clk_out
-    .data_mask(8'd0) //input [7:0] data_mask
-);
 
 endmodule
 
