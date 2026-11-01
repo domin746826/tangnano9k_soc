@@ -16,11 +16,11 @@ module top (
     input wire uartRx
 );
 
+// WRAPPER PSRAM
 wire WRPR_req_valid;
 wire WRPR_req_ready;
 wire WRPR_req_we;
 wire [20:0] WRPR_req_addr;
-// data
 wire [63:0] WRPR_write_data;
 wire [63:0] WRPR_read_data;
 
@@ -29,14 +29,43 @@ wire psram_clk; // 159m
 wire clk_lock;
 wire sys_clk;
 wire lcd_clk;
+wire sys_nrst = btn1;
 
+
+// GOWIN PSRAM IP CORE signals
 wire PSRAM_init_calib, PSRAM_rd_data_valid;
 wire [63:0] PSRAM_rd_data;
 wire [63:0] PSRAM_wr_data;
 wire [20:0] PSRAM_addr;
 wire PSRAM_cmd;
 wire PSRAM_cmd_en;
-wire sys_nrst = btn1;
+
+arbitrer arbitrer_inst (
+    .nrst(nrst),
+    .sys_clk(sys_clk),
+
+    // wrapper psram port
+    .WRPR_req_valid(WRPR_req_valid),
+    .WRPR_req_ready(WRPR_req_ready),
+    .WRPR_req_we(WRPR_req_we),
+    .WRPR_req_addr(WRPR_req_addr),
+    .WRPR_write_data(WRPR_write_data),
+    .WRPR_read_data(WRPR_read_data),
+
+    // cpu cache port (rw)
+    .CPU_req_valid(),
+    .CPU_req_ready(),
+    .CPU_req_we(),
+    .CPU_req_addr(),
+    .CPU_write_data(),
+    .CPU_read_data(),
+
+    // lcd port (ro)
+    .LCD_req_valid(),
+    .LCD_req_ready(),
+    .LCD_req_addr(),
+    .LCD_read_data()
+);
 
 psram_wrapper psram_wrapper_inst (
     // system
