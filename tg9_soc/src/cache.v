@@ -22,10 +22,38 @@ module cache (
     
 );
 
-always @(posedge clk or negedge nrst) begin
+wire cpu_addr_nibble = cpu_addr[2]; // low/high nibble
+wire [1:0] cpu_addr_offset = cpu_addr[5:3]; // which word in cache line
+wire [5:0] cpu_addr_ram_line = cpu_addr[11:6]; // which line in cache
+wire [20:0] cpu_addr_tag = cpu_addr[31:12]; // msb of real address
+
+reg [21:0] tag_mem[0:63];
+reg [63:0] data_mem[0:511];
+
+reg [1:0] state;
+localparam IDLE = 0;
+localparam COMPARE = 1;
+localparam WRITEBACK = 2;
+localparam REFILL = 3;
+
+always @(posedge sys_clk or negedge nrst) begin
 if(!nrst) begin
-    
+    state <= IDLE;
 end else begin
+    case (state)
+        IDLE: begin
+        end
+
+        COMPARE: begin
+        end
+
+        WRITEBACK: begin
+        end
+
+        REFILL: begin
+        end
+    endcase
+
 
 end
 end
