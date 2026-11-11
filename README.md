@@ -7,8 +7,8 @@ Goal is to run Linux on it and write all code without using any LLM generated co
 Roadmap
 - [x] PSRAM wrapper
 - [x] Memory Arbiter
-- [ ] L1 Cache *in progress*
-- [ ] RV32I
+- [x] L1 Cache
+- [ ] RV32I *in progress*
 - [ ] UART & some timers
 - [ ] LCD/Framebuffer
 - [ ] SD Card support
