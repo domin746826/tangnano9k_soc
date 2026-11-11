@@ -9,12 +9,13 @@ module top (
     output wire [1:0] O_psram_reset_n,
     
     input wire in_clk,
-    output reg [5:0] led,
+    output wire [5:0] led,
     input wire btn1,
     input wire btn2,
     output wire uartTx,
     input wire uartRx
 );
+assign uartTx = 1'b1;
 
 // WRAPPER PSRAM
 wire WRPR_req_valid;
@@ -24,14 +25,6 @@ wire [20:0] WRPR_req_addr;
 wire [63:0] WRPR_write_data;
 wire [63:0] WRPR_read_data;
 
-
-wire psram_clk; // 159m
-wire clk_lock;
-wire sys_clk;
-wire lcd_clk;
-wire sys_nrst = btn1;
-
-
 // GOWIN PSRAM IP CORE signals
 wire PSRAM_init_calib, PSRAM_rd_data_valid;
 wire [63:0] PSRAM_rd_data;
@@ -39,6 +32,68 @@ wire [63:0] PSRAM_wr_data;
 wire [20:0] PSRAM_addr;
 wire PSRAM_cmd;
 wire PSRAM_cmd_en;
+
+wire psram_clk; // 159m
+wire clk_lock;
+wire sys_clk;
+wire lcd_clk;
+wire sys_nrst = btn1;
+
+reg [3:0] rst_sh;
+always @(posedge sys_clk or negedge sys_nrst)
+    if (!sys_nrst) rst_sh <= 4'd0;
+    else           rst_sh <= {rst_sh[2:0], PSRAM_init_calib};
+wire nrst = rst_sh[3];
+
+// cache_d <=> cpu
+wire dcpu_valid;
+wire [31:0] dcpu_addr;
+wire [31:0] dcpu_wdata;
+wire [3:0] dcpu_wstrb;
+// wire dcpu_flush,
+wire [31:0] dcpu_rdata;
+wire dcpu_ready;
+
+// cache_i <=> cpu
+wire icpu_valid;
+wire [31:0] icpu_addr;
+// wire dcpu_flush,
+wire [31:0] icpu_rdata;
+wire icpu_ready;
+
+// cache_d <=> arbitrer
+wire CPUD_req_valid;
+wire CPUD_req_ready;
+wire CPUD_req_we;
+wire [20:0] CPUD_req_addr;
+wire [63:0] CPUD_write_data;
+wire [63:0] CPUD_read_data;
+
+// cache_i <=> arbitrer
+wire CPUI_req_valid;
+wire CPUI_req_ready;
+wire [20:0] CPUI_req_addr;
+wire [63:0] CPUI_read_data;
+
+// CPU GOES HERE
+
+// selftest #(.CLK_HZ(45_000_000), .BAUD(115200)) selftest_inst (
+//     .sys_clk(sys_clk), .nrst(nrst),
+//     .dcpu_valid(dcpu_valid), .dcpu_addr(dcpu_addr), .dcpu_wdata(dcpu_wdata),
+//     .dcpu_wstrb(dcpu_wstrb), .dcpu_rdata(dcpu_rdata), .dcpu_ready(dcpu_ready),
+//     .icpu_valid(icpu_valid), .icpu_addr(icpu_addr),
+//     .icpu_rdata(icpu_rdata), .icpu_ready(icpu_ready),
+//     .led(led), .uart_tx(uartTx)
+// );
+
+cpu cpu_inst (
+    .sys_clk(sys_clk), .nrst(nrst),
+    .dcpu_valid(dcpu_valid), .dcpu_addr(dcpu_addr), .dcpu_wdata(dcpu_wdata),
+    .dcpu_wstrb(dcpu_wstrb), .dcpu_rdata(dcpu_rdata), .dcpu_ready(dcpu_ready),
+    .icpu_valid(icpu_valid), .icpu_addr(icpu_addr),
+    .icpu_rdata(icpu_rdata), .icpu_ready(icpu_ready),
+    .led(led)
+);
 
 arbitrer arbitrer_inst (
     .nrst(nrst),
@@ -52,19 +107,72 @@ arbitrer arbitrer_inst (
     .WRPR_write_data(WRPR_write_data),
     .WRPR_read_data(WRPR_read_data),
 
-    // cpu cache port (rw)
-    .CPU_req_valid(),
-    .CPU_req_ready(),
-    .CPU_req_we(),
-    .CPU_req_addr(),
-    .CPU_write_data(),
-    .CPU_read_data(),
+    // cpu dcache port (rw)
+    .CPUD_req_valid(CPUD_req_valid),
+    .CPUD_req_ready(CPUD_req_ready),
+    .CPUD_req_we(CPUD_req_we),
+    .CPUD_req_addr(CPUD_req_addr),
+    .CPUD_write_data(CPUD_write_data),
+    .CPUD_read_data(CPUD_read_data),
+
+    // cpu icache port (ro)
+    .CPUI_req_valid(CPUI_req_valid),
+    .CPUI_req_ready(CPUI_req_ready),
+    .CPUI_req_addr(CPUI_req_addr),
+    .CPUI_read_data(CPUI_read_data),
 
     // lcd port (ro)
-    .LCD_req_valid(),
+    .LCD_req_valid(1'd0),
     .LCD_req_ready(),
-    .LCD_req_addr(),
+    .LCD_req_addr(21'd0),
     .LCD_read_data()
+);
+
+
+
+rwcache dcache_inst (
+    // system
+    .sys_clk(sys_clk),
+    .nrst(nrst),
+
+    // cpu port
+    .cpu_valid(dcpu_valid),
+    .cpu_addr(dcpu_addr),
+    .cpu_wdata(dcpu_wdata),
+    .cpu_wstrb(dcpu_wstrb),
+    // input wire cpu_flush,
+    .cpu_rdata(dcpu_rdata),
+    .cpu_ready(dcpu_ready),
+
+    // arbitrer port
+    .CPU_req_valid(CPUD_req_valid),
+    .CPU_req_ready(CPUD_req_ready),
+    .CPU_req_we(CPUD_req_we),
+    .CPU_req_addr(CPUD_req_addr),
+    .CPU_write_data(CPUD_write_data),
+    .CPU_read_data(CPUD_read_data)
+    
+);
+
+
+rocache icache_inst (
+    // system
+    .sys_clk(sys_clk),
+    .nrst(nrst),
+
+    // cpu port
+    .cpu_valid(icpu_valid),
+    .cpu_addr(icpu_addr),
+    // input wire cpu_flush,
+    .cpu_rdata(icpu_rdata),
+    .cpu_ready(icpu_ready),
+
+    // arbitrer port
+    .CPU_req_valid(CPUI_req_valid),
+    .CPU_req_ready(CPUI_req_ready),
+    .CPU_req_addr(CPUI_req_addr),
+    .CPU_read_data(CPUI_read_data)
+    
 );
 
 psram_wrapper psram_wrapper_inst (
@@ -92,18 +200,30 @@ psram_wrapper psram_wrapper_inst (
     .read_data(WRPR_read_data)
 );
 
-rPLL #( // For GW1NR-9 C6/I5
+
+rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
   .FCLKIN("27"),
   .IDIV_SEL(2), // -> PFD = 9 MHz (range: 3-400 MHz)
-  .FBDIV_SEL(13), // -> CLKOUT = 126 MHz (range: 3.125-500 MHz)
-  .DYN_SDIV_SEL(14),   .ODIV_SEL(4) // -> VCO = 504 MHz (range: 400-1000 MHz)
+  .FBDIV_SEL(9), // -> CLKOUT = 90 MHz (range: 3.125-600 MHz)
+  .DYN_SDIV_SEL(10),   .ODIV_SEL(8) // -> VCO = 720 MHz (range: 400-1200 MHz)
 ) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
   .CLKIN(in_clk), // 27 MHz
-  .CLKOUT(psram_clk), // 126 MHz
+  .CLKOUT(psram_clk), // 90 MHz
   .CLKOUTD(lcd_clk), // 9 MHz
   .LOCK(clk_lock)
 );
 
+// rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
+//   .FCLKIN("27"),
+//   .IDIV_SEL(8), // -> PFD = 3 MHz (range: 3-400 MHz)
+//   .FBDIV_SEL(39), // -> CLKOUT = 120 MHz (range: 3.125-600 MHz)
+//   .DYN_SDIV_SEL(12),   .ODIV_SEL(4) // -> VCO = 480 MHz (range: 400-1200 MHz)
+// ) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
+//   .CLKIN(in_clk), // 27 MHz
+//   .CLKOUT(psram_clk), // 120 MHz
+//   .CLKOUTD(lcd_clk), // 10 MHz
+//   .LOCK(clk_lock)
+// );
 
 PSRAM_Memory_Interface_HS_Top psram_inst(
     .clk(psram_clk), //input clk
@@ -126,6 +246,10 @@ PSRAM_Memory_Interface_HS_Top psram_inst(
     .clk_out(sys_clk), //output clk_out
     .data_mask(8'd0) //input [7:0] data_mask
 );
+
+
+
+
 
 
 endmodule

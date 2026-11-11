@@ -7,9 +7,12 @@
     <FileList>
         <File path="src/arbitrer.v" type="file.verilog" enable="1"/>
         <File path="src/cache.v" type="file.verilog" enable="1"/>
+        <File path="src/cache_i.v" type="file.verilog" enable="1"/>
+        <File path="src/cpu.v" type="file.verilog" enable="1"/>
         <File path="src/psram_memory_interface_hs/psram_memory_interface_hs.v" type="file.verilog" enable="1"/>
         <File path="src/psram_selftest.v" type="file.verilog" enable="0"/>
         <File path="src/psram_wrapper.v" type="file.verilog" enable="1"/>
+        <File path="src/registers.v" type="file.verilog" enable="1"/>
         <File path="src/top.v" type="file.verilog" enable="1"/>
         <File path="src/tangnano9k.cst" type="file.cst" enable="1"/>
         <File path="src/tg9_soc.sdc" type="file.sdc" enable="1"/>

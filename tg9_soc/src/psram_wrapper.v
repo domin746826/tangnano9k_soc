@@ -66,21 +66,20 @@ case (state)
             state <= READY;
         end
     end READY: begin
-        if(tclk == 0 && req_valid) begin
-            tclk <= Tclk_val;
-            cmd <= req_we; // 0 read 1 write
-            cmd_en <= 1;
-            addr <= req_addr;
-            if(req_we) begin
-                req_ready <= 1;
-                wr_data <= write_data;
-                state <= WRITE;
-            end else begin
-                state <= READ;
-            end
-        
+    if (tclk == 0 && req_valid) begin
+        tclk   <= Tclk_val;
+        cmd    <= req_we;
+        cmd_en <= ~req_we;        // odczyt: od razu; zapis: dopiero w stanie WRITE
+        addr   <= req_addr;
+        rw_clk <= 3'd0;
+        if (req_we) begin
+            req_ready <= 1;       // cache zobaczy ready w c1
+            state     <= WRITE;   // (bez wr_data <= write_data tutaj!)
+        end else begin
+            state <= READ;
         end
-    end READ: begin
+    end
+end READ: begin
         cmd_en <= 0;
         if(rd_data_valid) begin
             req_ready <= 1;
@@ -94,17 +93,16 @@ case (state)
         
 
     end WRITE: begin
-        cmd_en <= 0;
-        rw_clk <= rw_clk + 1;
-        wr_data <= write_data;
-        req_ready <= 1;
-        if(rw_clk == 3'd6) begin
-            state <= READY;
-            rw_clk <= 0;
-            req_ready <= 0;
-        end
-
+    cmd_en    <= (rw_clk == 3'd0);   // 1 takt, razem z pierwszym beatem
+    wr_data   <= write_data;         // próbki c1..c8 = q0..q7
+    req_ready <= 1;
+    rw_clk    <= rw_clk + 3'd1;
+    if (rw_clk == 3'd7) begin
+        state     <= READY;
+        rw_clk    <= 3'd0;
+        req_ready <= 1'b0;
     end
+end
 endcase
 end
 end
