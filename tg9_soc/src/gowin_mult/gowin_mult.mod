@@ -1,0 +1,23 @@
+-series GW1NR
+-device GW1NR-9
+-device_version C
+-package QFN88P
+-part_number GW1NR-LV9QN88PC6/I5
+
+
+-mod_name Gowin_MULT
+-file_name gowin_mult
+-path /home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/gowin_mult/
+-type MULT
+-file_type vlg
+-source_a parallel
+-source_b parallel
+-width_a 33
+-width_b 33
+-data_type_a signed
+-data_type_b signed
+-reset_mode sync
+-ina_reg registered
+-inb_reg registered
+-pipe_reg bypass
+-out_reg registered

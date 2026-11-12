@@ -7,6 +7,12 @@ module top (
     inout wire [1:0] IO_psram_rwds,
     output wire [1:0] O_psram_cs_n,
     output wire [1:0] O_psram_reset_n,
+
+    output wire [15:0] LCD_PORT,
+    output wire LCD_HSYNC,
+    output wire LCD_VSYNC,
+    output wire LCD_DEN,
+    output wire LCD_CLK,
     
     input wire in_clk,
     output wire [5:0] led,
@@ -45,14 +51,24 @@ always @(posedge sys_clk or negedge sys_nrst)
     else           rst_sh <= {rst_sh[2:0], PSRAM_init_calib};
 wire nrst = rst_sh[3];
 
-// cache_d <=> cpu
+// cache_d / rom <=> cpu
 wire dcpu_valid;
 wire [31:0] dcpu_addr;
 wire [31:0] dcpu_wdata;
 wire [3:0] dcpu_wstrb;
 // wire dcpu_flush,
-wire [31:0] dcpu_rdata;
-wire dcpu_ready;
+wire [31:0] dcache_rdata;
+wire dcache_ready;
+wire [31:0] drom_rdata;
+wire drom_ready;
+wire dcpu_is_rom = dcpu_addr[31];
+wire [31:0] dcpu_rdata = dcpu_is_rom ? drom_rdata : dcache_rdata;
+wire dcpu_ready = dcpu_is_rom ? drom_ready : dcache_ready;
+
+wire LCD_req_valid;
+wire LCD_req_ready;
+wire [20:0] LCD_req_addr;
+wire [63:0] LCD_read_data;
 
 // cache_i <=> cpu
 wire icpu_valid;
@@ -95,6 +111,8 @@ cpu cpu_inst (
     .led(led)
 );
 
+
+
 arbitrer arbitrer_inst (
     .nrst(nrst),
     .sys_clk(sys_clk),
@@ -122,10 +140,25 @@ arbitrer arbitrer_inst (
     .CPUI_read_data(CPUI_read_data),
 
     // lcd port (ro)
-    .LCD_req_valid(1'd0),
-    .LCD_req_ready(),
-    .LCD_req_addr(21'd0),
-    .LCD_read_data()
+    .LCD_req_valid(LCD_req_valid),
+    .LCD_req_ready(LCD_req_ready),
+    .LCD_req_addr(LCD_req_addr),
+    .LCD_read_data(LCD_read_data)
+);
+
+lcd_driver lcd_inst(
+    .nrst(nrst),
+    .sys_clk(sys_clk),
+    .clk_lcd(lcd_clk),
+    .color_port(LCD_PORT),
+    .hsync(LCD_HSYNC),
+    .vsync(LCD_VSYNC),
+    .de(LCD_DEN),
+    .lcd_clk(LCD_CLK),
+    .LCD_req_valid(LCD_req_valid),
+    .LCD_req_ready(LCD_req_ready),
+    .LCD_req_addr(LCD_req_addr),
+    .LCD_read_data(LCD_read_data)
 );
 
 
@@ -136,13 +169,13 @@ rwcache dcache_inst (
     .nrst(nrst),
 
     // cpu port
-    .cpu_valid(dcpu_valid),
+    .cpu_valid(dcpu_valid && !dcpu_is_rom),
     .cpu_addr(dcpu_addr),
     .cpu_wdata(dcpu_wdata),
     .cpu_wstrb(dcpu_wstrb),
     // input wire cpu_flush,
-    .cpu_rdata(dcpu_rdata),
-    .cpu_ready(dcpu_ready),
+    .cpu_rdata(dcache_rdata),
+    .cpu_ready(dcache_ready),
 
     // arbitrer port
     .CPU_req_valid(CPUD_req_valid),
@@ -166,6 +199,12 @@ rocache icache_inst (
     // input wire cpu_flush,
     .cpu_rdata(icpu_rdata),
     .cpu_ready(icpu_ready),
+
+    // data-side ROM port
+    .drom_valid(dcpu_valid && dcpu_is_rom),
+    .drom_addr(dcpu_addr),
+    .drom_rdata(drom_rdata),
+    .drom_ready(drom_ready),
 
     // arbitrer port
     .CPU_req_valid(CPUI_req_valid),
@@ -213,6 +252,18 @@ rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
   .LOCK(clk_lock)
 );
 
+//  rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
+//   .FCLKIN("27"),
+//   .IDIV_SEL(2), // -> PFD = 9 MHz (range: 3-400 MHz)
+//   .FBDIV_SEL(7), // -> CLKOUT = 72 MHz (range: 3.125-600 MHz)
+//   .DYN_SDIV_SEL(8),   .ODIV_SEL(8) // -> VCO = 576 MHz (range: 400-1200 MHz)
+// ) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
+//   .CLKIN(in_clk), // 27 MHz
+//   .CLKOUT(psram_clk), // 72 MHz
+//   .CLKOUTD(lcd_clk), // 9 MHz
+//   .LOCK(clk_lock)
+// );
+
 
 // rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
 //   .FCLKIN("27"),
@@ -237,6 +288,31 @@ rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
 //   .CLKOUTD(lcd_clk), // 10 MHz
 //   .LOCK(clk_lock)
 // );
+
+// rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
+//   .FCLKIN("27"),
+//   .IDIV_SEL(8), // -> PFD = 3 MHz (range: 3-400 MHz)
+//   .FBDIV_SEL(36), // -> CLKOUT = 111 MHz (range: 3.125-600 MHz)
+//   .DYN_SDIV_SEL(12),   .ODIV_SEL(4) // -> VCO = 444 MHz (range: 400-1200 MHz)
+// ) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
+//   .CLKIN(in_clk), // 27 MHz
+//   .CLKOUT(psram_clk), // 111 MHz
+//   .CLKOUTD(lcd_clk), // 9.25 MHz
+//   .LOCK(clk_lock)
+// );
+
+//  rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
+//   .FCLKIN("27"),
+//   .IDIV_SEL(0), // -> PFD = 27 MHz (range: 3-400 MHz)
+//   .FBDIV_SEL(0), // -> CLKOUT = 27 MHz (range: 3.125-600 MHz)
+//   .DYN_SDIV_SEL(4),   .ODIV_SEL(16) // -> VCO = 432 MHz (range: 400-1200 MHz)
+// ) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
+//   .CLKIN(in_clk), // 27 MHz
+//   .CLKOUT(psram_clk), // 27 MHz
+//   .CLKOUTD(lcd_clk), // 6.75 MHz
+//   .LOCK(clk_lock)
+// );
+
 
 PSRAM_Memory_Interface_HS_Top psram_inst(
     .clk(psram_clk), //input clk

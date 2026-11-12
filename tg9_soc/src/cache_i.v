@@ -12,6 +12,12 @@ module rocache (
     output reg [31:0] cpu_rdata,
     output reg cpu_ready,
 
+    // data-side ROM port (0x8000_0000..0x8000_1FFF)
+    input wire drom_valid,
+    input wire [31:0] drom_addr,
+    output wire [31:0] drom_rdata,
+    output reg drom_ready,
+
     // arbitrer port ro
     output reg CPU_req_valid,
     input wire CPU_req_ready,
@@ -38,12 +44,12 @@ reg [63:0] data_mem[0:511];
 reg [19:0] fetched_tag;
 reg [63:0] fetched_data;
 
-(* ram_style="block" *) reg [31:0] bios_rom [0:511]; // 2 KB
+(* ram_style="block" *) reg [31:0] bios_rom [0:2047]; // 8 KB
 reg [31:0] fetched_rom;
 
 initial begin
     // $readmemh("../../asm/ledtest1/bios.hex", bios_rom);
-    $readmemh("../../asm/memtest/bios.hex", bios_rom);
+    $readmemh("../../asm/bios/bios.hex", bios_rom);
 
 end
 
@@ -63,6 +69,9 @@ wire [2:0] mem_word_idx = (state == REFILL) ? burst_cnt : cpu_addr_offset;
 wire [8:0] data_mem_addr = {cpu_addr_ram_line, mem_word_idx};
 wire tag_mem_we = (state == REFILL && burst_active && (burst_cnt == 3'd7));
 
+wire [10:0] rom_word_addr = drom_valid ? drom_addr[12:2] : cpu_addr[12:2];
+assign drom_rdata = fetched_rom;
+
 // bsram
 always @(posedge sys_clk) begin
     fetched_data <= data_mem[data_mem_addr];
@@ -75,7 +84,7 @@ always @(posedge sys_clk) begin
         tag_mem[cpu_addr_ram_line] <= cpu_addr_tag;
     end
 
-    fetched_rom <= bios_rom[cpu_addr[10:2]];
+    fetched_rom <= bios_rom[rom_word_addr];
 end
 
 always @(posedge sys_clk or negedge nrst) begin
@@ -84,16 +93,18 @@ if (!nrst) begin
     tag_mem_valid <= 64'd0;
     cpu_ready <= 1'b0;
     cpu_rdata <= 32'd0;
+    drom_ready <= 1'b0;
     CPU_req_valid <= 1'b0;
     CPU_req_addr <= 21'd0;
     burst_cnt <= 3'd0;
     burst_active <= 1'b0;
 end else begin
     cpu_ready <= 1'b0;
+    drom_ready <= drom_valid && !drom_ready;
 
     case (state)
         IDLE: begin
-            if (cpu_valid && !cpu_ready) begin
+            if (cpu_valid && !cpu_ready && !drom_valid) begin
                 state <= COMPARE;
             end
         end
