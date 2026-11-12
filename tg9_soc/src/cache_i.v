@@ -43,7 +43,7 @@ reg [31:0] fetched_rom;
 
 initial begin
     // $readmemh("../../asm/ledtest1/bios.hex", bios_rom);
-    $readmemh("../../asm/blink/bios.hex", bios_rom);
+    $readmemh("../../asm/memtest/bios.hex", bios_rom);
 
 end
 

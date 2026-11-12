@@ -58,11 +58,13 @@ reg [31:0] rs1_reg;
 reg [31:0] rs2_reg;
 reg [31:0] pc_branch_target;
 wire [31:0] store_addr = rs1_reg + imm_s; // SW
+wire [31:0] load_addr = rs1_reg + imm_i; // LW
 
 reg [1:0] state;
 localparam FETCH = 0;
 localparam DECODE = 1;
 localparam EXECUTE = 2;
+localparam MEM = 3;
 
 always @(posedge sys_clk) begin
 if(!nrst) begin
@@ -86,6 +88,7 @@ end else begin
                 icpu_valid <= 0;
                 state <= DECODE; // got opcode, let comb logic pull rs1 rs2 vals
             end
+
         end
 
         DECODE: begin
@@ -99,6 +102,7 @@ end else begin
             REGS_rd_we <= 1;
             icpu_valid <= 1;
             PC <= PC + 4;
+            state <= FETCH;
             case(opcode)
                 ADDI_OP: begin
                     case(funct3)
@@ -119,12 +123,40 @@ end else begin
                     REGS_rd_we <= 0;
                     if(store_addr[31:30] == 2'b11) begin // 0xC000_0000 - MMIO
                         led <= rs2_reg[5:0];
+                    end else begin // mem
+                        PC <= PC; // stall for write
+                        state <= MEM;
+                        dcpu_valid <= 1'b1;
+                        icpu_valid <= 1'b0;
+                        dcpu_addr <= {store_addr[31:2], 2'd0};
+                        case(funct3)
+                            3'b000: begin // SB
+                                dcpu_wdata <= {4{rs2_reg[7:0]}};
+                                dcpu_wstrb <= 4'b0001 << store_addr[1:0];
+                            end
+                            3'b001: begin // SH
+                                dcpu_wdata <= {2{rs2_reg[15:0]}};
+                                dcpu_wstrb <= store_addr[1]? 4'b1100:4'b0011;
+                            end
+                            3'b010: begin // SW
+                                dcpu_wdata <= rs2_reg;
+                                dcpu_wstrb <= 4'b1111;
+                            end
+                        endcase
                     end
-                    // todo
                 end
                 LW_OP: begin
                     REGS_rd_we <= 0;
-                    // todo
+                    if(load_addr[31:30] == 2'b11) begin // 0xC000_0000 - MMIO
+                        // led <= rs2_reg[5:0];
+                    end else begin // mem
+                        PC <= PC; // stall for read
+                        state <= MEM;
+                        dcpu_valid <= 1'b1;
+                        icpu_valid <= 1'b0;
+                        dcpu_addr <= {load_addr[31:2], 2'd0};
+                        dcpu_wstrb <= 4'd0;
+                    end
                 end
                 LUI_OP: begin
                     REGS_rd_data <= imm_u;
@@ -165,10 +197,53 @@ end else begin
                     endcase
                 end
             endcase
-            state <= FETCH;
         end
 
-        default: state <= FETCH;
+        MEM: begin
+            if(dcpu_ready) begin // wait for mem
+                dcpu_valid <= 1'b0;
+                dcpu_wstrb <= 4'd0;
+                PC <= PC + 4; // resume
+                icpu_valid <= 1'b1;
+                state <= FETCH;
+                if(opcode == LW_OP) begin
+                    REGS_rd_we <= 1;
+                    case(funct3)
+                        3'b000: begin // LB
+                            case(load_addr[1:0])
+                                2'd0: REGS_rd_data <= {{24{dcpu_rdata[7]}},  dcpu_rdata[7:0]};
+                                2'd1: REGS_rd_data <= {{24{dcpu_rdata[15]}}, dcpu_rdata[15:8]};
+                                2'd2: REGS_rd_data <= {{24{dcpu_rdata[23]}}, dcpu_rdata[23:16]};
+                                2'd3: REGS_rd_data <= {{24{dcpu_rdata[31]}}, dcpu_rdata[31:24]};
+                            endcase
+                        end
+                        3'b100: begin // LBU
+                            case(load_addr[1:0])
+                                2'd0: REGS_rd_data <= {24'd0,  dcpu_rdata[7:0]};
+                                2'd1: REGS_rd_data <= {24'd0, dcpu_rdata[15:8]};
+                                2'd2: REGS_rd_data <= {24'd0, dcpu_rdata[23:16]};
+                                2'd3: REGS_rd_data <= {24'd0, dcpu_rdata[31:24]};
+                            endcase
+                        end
+                        3'b001: begin // LH
+                            if(load_addr[1]) begin
+                                REGS_rd_data <= {{16{dcpu_rdata[31]}}, dcpu_rdata[31:16]};
+                            end else begin
+                                REGS_rd_data <= {{16{dcpu_rdata[15]}}, dcpu_rdata[15:0]};
+                            end
+                        end
+                        3'b101: begin // LHU
+                            if(load_addr[1]) begin
+                                REGS_rd_data <= {16'd0, dcpu_rdata[31:16]};
+                            end else begin
+                                REGS_rd_data <= {16'd0, dcpu_rdata[15:0]};
+                            end
+                        end
+                        default: begin REGS_rd_data <= dcpu_rdata; end
+                    endcase
+                end
+            end
+        end
     endcase
 end
 end
