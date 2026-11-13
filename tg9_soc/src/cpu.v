@@ -9,12 +9,14 @@ module cpu (
     output reg [3:0] dcpu_wstrb,
     input wire [31:0] dcpu_rdata,
     input wire dcpu_ready,
+    output reg dcpu_flush,
 
     // icache cpu port
     output reg icpu_valid,
     output wire [31:0] icpu_addr,
     input wire [31:0] icpu_rdata,
     input wire icpu_ready,
+    output reg icpu_flush,
 
     output reg [5:0] led
 );
@@ -41,9 +43,10 @@ localparam LUI_OP = 7'b0110111;
 localparam SW_OP = 7'b0100011; 
 localparam LW_OP = 7'b0000011; 
 localparam BEQ_OP = 7'b1100011; 
-localparam JAL_OP = 7'b1101111; 
-localparam JALR_OP = 7'b1100111; 
+localparam JAL_OP = 7'b1101111;
+localparam JALR_OP = 7'b1100111;
 localparam AUIPC_OP = 7'b0010111; 
+localparam FENCE_OP = 7'b0001111;
 
 wire [4:0] REGS_rs1_addr = rs1_addr;
 wire [4:0] REGS_rs2_addr = rs2_addr;
@@ -96,6 +99,8 @@ if(!nrst) begin
     mul_wait <= 0;
     div_start <= 0;
     div_started <= 0;
+    dcpu_flush <= 1'b0;
+    icpu_flush <= 1'b0;
 end else begin
     case(state)
         FETCH: begin
@@ -266,12 +271,22 @@ end else begin
                         3'b111: if (rs1_reg >= rs2_reg) PC <= pc_branch_target; // BGEU
                     endcase
                 end
+                FENCE_OP: begin
+                    REGS_rd_we <= 0;
+                    PC <= PC;
+                    state <= MEM;
+                    dcpu_flush <= 1;
+                    icpu_flush <= (funct3 == 3'b001); // FENCE.I
+                    icpu_valid <= 0;
+                end
             endcase
         end
 
         MEM: begin
+            icpu_flush <= 1'b0;
             if(dcpu_ready) begin // wait for mem
                 dcpu_valid <= 1'b0;
+                dcpu_flush <= 1'b0;
                 dcpu_wstrb <= 4'd0;
                 PC <= PC + 4; // resume
                 icpu_valid <= 1'b1;

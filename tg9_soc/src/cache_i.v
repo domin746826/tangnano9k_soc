@@ -8,7 +8,7 @@ module rocache (
     // cpu port ro
     input wire cpu_valid,
     input wire [31:0] cpu_addr,
-    // input wire cpu_flush,
+    input wire cpu_flush,
     output reg [31:0] cpu_rdata,
     output reg cpu_ready,
 
@@ -104,7 +104,9 @@ end else begin
 
     case (state)
         IDLE: begin
-            if (cpu_valid && !cpu_ready && !drom_valid) begin
+            if(cpu_flush) begin
+                tag_mem_valid <= 64'd0;
+            end else if (cpu_valid && !cpu_ready && !drom_valid) begin
                 state <= COMPARE;
             end
         end

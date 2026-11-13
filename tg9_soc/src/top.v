@@ -56,7 +56,7 @@ wire dcpu_valid;
 wire [31:0] dcpu_addr;
 wire [31:0] dcpu_wdata;
 wire [3:0] dcpu_wstrb;
-// wire dcpu_flush,
+wire dcpu_flush;
 wire [31:0] dcache_rdata;
 wire dcache_ready;
 wire [31:0] drom_rdata;
@@ -73,7 +73,7 @@ wire [63:0] LCD_read_data;
 // cache_i <=> cpu
 wire icpu_valid;
 wire [31:0] icpu_addr;
-// wire dcpu_flush,
+wire icpu_flush;
 wire [31:0] icpu_rdata;
 wire icpu_ready;
 
@@ -105,9 +105,9 @@ wire [63:0] CPUI_read_data;
 cpu cpu_inst (
     .sys_clk(sys_clk), .nrst(nrst),
     .dcpu_valid(dcpu_valid), .dcpu_addr(dcpu_addr), .dcpu_wdata(dcpu_wdata),
-    .dcpu_wstrb(dcpu_wstrb), .dcpu_rdata(dcpu_rdata), .dcpu_ready(dcpu_ready),
+    .dcpu_wstrb(dcpu_wstrb), .dcpu_rdata(dcpu_rdata), .dcpu_ready(dcpu_ready), .dcpu_flush(dcpu_flush),
     .icpu_valid(icpu_valid), .icpu_addr(icpu_addr),
-    .icpu_rdata(icpu_rdata), .icpu_ready(icpu_ready),
+    .icpu_rdata(icpu_rdata), .icpu_ready(icpu_ready), .icpu_flush(icpu_flush),
     .led(led)
 );
 
@@ -173,7 +173,7 @@ rwcache dcache_inst (
     .cpu_addr(dcpu_addr),
     .cpu_wdata(dcpu_wdata),
     .cpu_wstrb(dcpu_wstrb),
-    // input wire cpu_flush,
+    .cpu_flush(dcpu_flush),
     .cpu_rdata(dcache_rdata),
     .cpu_ready(dcache_ready),
 
@@ -196,7 +196,7 @@ rocache icache_inst (
     // cpu port
     .cpu_valid(icpu_valid),
     .cpu_addr(icpu_addr),
-    // input wire cpu_flush,
+    .cpu_flush(icpu_flush),
     .cpu_rdata(icpu_rdata),
     .cpu_ready(icpu_ready),
 

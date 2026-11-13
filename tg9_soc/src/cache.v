@@ -44,11 +44,15 @@ reg [19:0] fetched_tag;
 reg [63:0] fetched_data;
 
 
-reg [1:0] state;
-localparam IDLE = 2'd0;
-localparam COMPARE = 2'd1;
-localparam WRITEBACK = 2'd2;
-localparam REFILL = 2'd3;
+reg [2:0] state;
+localparam IDLE = 3'd0;
+localparam COMPARE = 3'd1;
+localparam WRITEBACK = 3'd2;
+localparam REFILL = 3'd3;
+localparam FLUSH_SCAN = 3'd4; // find dirty lines
+localparam FLUSH_PREP = 3'd5;
+localparam FLUSH_WB   = 3'd6;
+reg [5:0] flush_line; // flush line cnt
 
 reg [2:0] burst_cnt;
 reg burst_active;
