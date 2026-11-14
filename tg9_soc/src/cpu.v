@@ -18,13 +18,16 @@ module cpu (
     input wire icpu_ready,
     output reg icpu_flush,
 
-    output reg [5:0] led
+    output reg [31:0] mmio_addr,
+    output reg [31:0] mmio_data_in,
+    output reg [3:0] mmio_wstrb,
+    input wire [31:0] mmio_data_out
 );
 
 reg [31:0] PC;
 reg [31:0] PC_next;
 assign icpu_addr = PC;
-
+reg mmio_wait;
 // instruction decomposition
 wire [6:0] opcode = icpu_rdata[6:0];
 wire [4:0] rs1_addr = icpu_rdata[19:15];
@@ -57,8 +60,6 @@ wire [31:0] REGS_rs2_data;
 reg [31:0] REGS_rd_data;
 reg REGS_rd_we;
 
-// reg [31:0] REGS_rs1_data;
-// reg [31:0] REGS_rs2_data;
 reg [31:0] pc_branch_target;
 wire [31:0] store_addr = REGS_rs1_data + imm_s; // SW
 wire [31:0] load_addr = REGS_rs1_data + imm_i; // LW
@@ -77,6 +78,8 @@ divider div_inst (
     .clk(sys_clk), .start(div_start), .is_signed(~funct3[0]),
     .a(REGS_rs1_data), .b(REGS_rs2_data), .quo(div_q), .rem(div_r), .done(div_done)
 );
+
+
 reg [1:0] state;
 localparam FETCH = 0;
 localparam DECODE = 1;
@@ -93,22 +96,25 @@ if(!nrst) begin
     dcpu_addr <= 32'd0;
     dcpu_wdata <= 32'd0;
     dcpu_wstrb <= 4'd0;
-    led <= 6'b111111;
-    // REGS_rs1_data <= 32'd0;
-    // REGS_rs2_data <= 32'd0;
     pc_branch_target <= 32'd0;
     mul_wait <= 0;
     div_start <= 0;
     div_started <= 0;
     dcpu_flush <= 1'b0;
     icpu_flush <= 1'b0;
+    mmio_addr <= 32'd0;
+    mmio_data_in <= 32'd0;
+    mmio_wstrb <= 4'd0;
+    mmio_wait <= 1'b0;
 end else begin
     case(state)
         FETCH: begin
+            mmio_wstrb <= 4'd0;
             mul_wait <= 0;
             div_start <= 0;
             div_started <= 0;
             REGS_rd_we <= 0;
+            mmio_wait <= 0;
             if(icpu_ready) begin
                 icpu_valid <= 0;
                 state <= DECODE; // got opcode, let comb logic pull rs1 rs2 vals
@@ -119,8 +125,6 @@ end else begin
         DECODE: begin
             pc_branch_target <= PC + imm_b;
             PC_next <= PC + 4;
-            // REGS_rs1_data <= REGS_rs1_data;
-            // REGS_rs2_data <= REGS_rs2_data;
             state <= EXECUTE;
         end
 
@@ -154,7 +158,22 @@ end else begin
                 SW_OP: begin
                     REGS_rd_we <= 0;
                     if(store_addr[31:30] == 2'b11) begin // 0xC000_0000 - MMIO
-                        led <= REGS_rs2_data[5:0];
+                        mmio_addr <= store_addr;
+                        case(funct3)
+                            3'b000: begin // SB
+                                mmio_data_in <= {4{REGS_rs2_data[7:0]}};
+                                mmio_wstrb <= 4'b0001 << store_addr[1:0];
+                            end
+                            3'b001: begin // SH
+                                mmio_data_in <= {2{REGS_rs2_data[15:0]}};
+                                mmio_wstrb <= store_addr[1]? 4'b1100:4'b0011;
+                            end
+                            3'b010: begin // SW
+                                mmio_data_in <= REGS_rs2_data;
+                                mmio_wstrb <= 4'b1111;
+                            end
+                            default: begin end
+                        endcase
                     end else begin // mem
                         PC <= PC; // stall for write
                         state <= MEM;
@@ -174,16 +193,19 @@ end else begin
                                 dcpu_wdata <= REGS_rs2_data;
                                 dcpu_wstrb <= 4'b1111;
                             end
+                            default: begin end
                         endcase
                     end
                 end
                 LW_OP: begin
+                    icpu_valid <= 1'b0;
                     REGS_rd_we <= 0;
+                    PC <= PC; // stall for read
+                    state <= MEM;
                     if(load_addr[31:30] == 2'b11) begin // 0xC000_0000 - MMIO
-                        // led <= REGS_rs2_data[5:0];
+                        mmio_addr <= load_addr;
+                        mmio_wait <= 1;
                     end else begin // mem
-                        PC <= PC; // stall for read
-                        state <= MEM;
                         dcpu_valid <= 1'b1;
                         icpu_valid <= 1'b0;
                         dcpu_addr <= {load_addr[31:2], 2'd0};
@@ -286,6 +308,46 @@ end else begin
 
         MEM: begin
             icpu_flush <= 1'b0;
+            mmio_wait <= 0;
+            if(load_addr[31:30] == 2'b11 && opcode == LW_OP && mmio_wait == 0) begin // MMIO
+                REGS_rd_we <= 1;
+                state <= FETCH;
+                PC <= PC_next;
+                icpu_valid <= 1'b1;
+                case(funct3)
+                    3'b000: begin // LB
+                        case(load_addr[1:0])
+                            2'd0: REGS_rd_data <= {{24{mmio_data_out[7]}},  mmio_data_out[7:0]};
+                            2'd1: REGS_rd_data <= {{24{mmio_data_out[15]}}, mmio_data_out[15:8]};
+                            2'd2: REGS_rd_data <= {{24{mmio_data_out[23]}}, mmio_data_out[23:16]};
+                            2'd3: REGS_rd_data <= {{24{mmio_data_out[31]}}, mmio_data_out[31:24]};
+                        endcase
+                    end
+                    3'b100: begin // LBU
+                        case(load_addr[1:0])
+                            2'd0: REGS_rd_data <= {24'd0,  mmio_data_out[7:0]};
+                            2'd1: REGS_rd_data <= {24'd0, mmio_data_out[15:8]};
+                            2'd2: REGS_rd_data <= {24'd0, mmio_data_out[23:16]};
+                            2'd3: REGS_rd_data <= {24'd0, mmio_data_out[31:24]};
+                        endcase
+                    end
+                    3'b001: begin // LH
+                        if(load_addr[1]) begin
+                            REGS_rd_data <= {{16{mmio_data_out[31]}}, mmio_data_out[31:16]};
+                        end else begin
+                            REGS_rd_data <= {{16{mmio_data_out[15]}}, mmio_data_out[15:0]};
+                        end
+                    end
+                    3'b101: begin // LHU
+                        if(load_addr[1]) begin
+                            REGS_rd_data <= {16'd0, mmio_data_out[31:16]};
+                        end else begin
+                            REGS_rd_data <= {16'd0, mmio_data_out[15:0]};
+                        end
+                    end
+                    default: begin REGS_rd_data <= mmio_data_out; end
+                endcase
+            end else
             if(dcpu_ready) begin // wait for mem
                 dcpu_valid <= 1'b0;
                 dcpu_flush <= 1'b0;

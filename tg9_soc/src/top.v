@@ -21,7 +21,6 @@ module top (
     output wire uartTx,
     input wire uartRx
 );
-assign uartTx = 1'b1;
 
 // WRAPPER PSRAM
 wire WRPR_req_valid;
@@ -91,6 +90,26 @@ wire CPUI_req_ready;
 wire [20:0] CPUI_req_addr;
 wire [63:0] CPUI_read_data;
 
+// mmio
+wire [31:0] mmio_addr;
+wire [31:0] mmio_data_in;
+wire [3:0] mmio_wstrb;
+wire [31:0] mmio_data_out;
+
+mmio mmio_inst (
+    .sys_clk(sys_clk),
+    .nrst(nrst),
+    .addr(mmio_addr),
+    .data_in(mmio_data_in),
+    .wstrb(mmio_wstrb),
+    .data_out(mmio_data_out),
+
+    .led(led),
+    .btn(btn2),
+    .uart_tx(uartTx),
+    .uart_rx(uartRx)
+);
+
 // CPU GOES HERE
 
 // selftest #(.CLK_HZ(45_000_000), .BAUD(115200)) selftest_inst (
@@ -108,7 +127,10 @@ cpu cpu_inst (
     .dcpu_wstrb(dcpu_wstrb), .dcpu_rdata(dcpu_rdata), .dcpu_ready(dcpu_ready), .dcpu_flush(dcpu_flush),
     .icpu_valid(icpu_valid), .icpu_addr(icpu_addr),
     .icpu_rdata(icpu_rdata), .icpu_ready(icpu_ready), .icpu_flush(icpu_flush),
-    .led(led)
+    .mmio_addr(mmio_addr),
+    .mmio_data_in(mmio_data_in),
+    .mmio_wstrb(mmio_wstrb),
+    .mmio_data_out(mmio_data_out)
 );
 
 
