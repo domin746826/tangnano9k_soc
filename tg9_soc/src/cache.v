@@ -75,7 +75,7 @@ always @(*) begin
 end
 
 wire is_hit = (cpu_addr_tag == fetched_tag) && tag_mem_valid[cpu_addr_ram_line];
-wire data_mem_we = (state == COMPARE && is_hit && (cpu_wstrb != 4'b0000)) || (state == REFILL  && (CPU_req_ready || burst_active));
+wire data_mem_we = (state == COMPARE && is_hit && (cpu_wstrb != 4'b0000)) || (state == REFILL && (CPU_req_ready || burst_active));
 wire [63:0] data_mem_wdata = (state == COMPARE) ? modified_word : CPU_read_data;
 
 reg [2:0] mem_word_idx; // data_mem addr

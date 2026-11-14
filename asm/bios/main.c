@@ -1,18 +1,6 @@
 #include "soc.h"
 
-// =============================================================================
-// 1. Przepychanie D-Cache (Write-Back Eviction) -> naprawia ugryziony róg!
-// =============================================================================
-void dcache_flush(void) {
-    volatile uint32_t *dummy = (volatile uint32_t *)0x00200000UL;
-    for (int i = 0; i < 4096; i += 4) {
-        (void)dummy[i];
-    }
-}
 
-// =============================================================================
-// 2. Wystylizowane logo "TG9K_SoC" (8 znaków 6x7 = 56 bajtów!)
-// =============================================================================
 static const uint8_t logo_glyphs[8][7] = {
     {0x3F, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C, 0x0C}, // T
     {0x1E, 0x30, 0x30, 0x37, 0x33, 0x33, 0x1E}, // G

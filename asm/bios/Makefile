@@ -15,7 +15,7 @@ CFLAGS   = -march=rv32im -mabi=ilp32 -mstrict-align -Os -Wall -Wextra \
 
 LDFLAGS  = -T linker.ld -nostdlib -Wl,--gc-sections
 
-SRCS     = start.S main.c
+SRCS     = start.S main.c soc.c
 TARGET   = bios
 
 all: $(TARGET).hex
