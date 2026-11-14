@@ -9,7 +9,7 @@ module rwcache (
     input wire [31:0] cpu_addr,
     input wire [31:0] cpu_wdata,
     input wire [3:0] cpu_wstrb,
-    // input wire cpu_flush,
+    input wire cpu_flush,
     output reg [31:0] cpu_rdata,
     output reg cpu_ready,
 
@@ -53,7 +53,8 @@ localparam FLUSH_SCAN = 3'd4; // find dirty lines
 localparam FLUSH_PREP = 3'd5;
 localparam FLUSH_WB   = 3'd6;
 reg [5:0] flush_line; // flush line cnt
-
+wire is_flushing = {state[2]};
+wire [5:0] active_line = is_flushing ? flush_line : cpu_addr_ram_line;
 reg [2:0] burst_cnt;
 reg burst_active;
 
@@ -86,8 +87,12 @@ always @(*) begin
         COMPARE: begin
             mem_word_idx = is_hit ? cpu_addr_offset : 3'd0;
         end
-        WRITEBACK: begin
+        WRITEBACK, FLUSH_WB: begin
             mem_word_idx = (CPU_req_ready || burst_active) ? (burst_cnt + 3'd1) : burst_cnt;
+        end
+        FLUSH_SCAN,
+        FLUSH_PREP: begin
+            mem_word_idx = 3'd0;
         end
         REFILL: begin
             mem_word_idx = burst_cnt;
@@ -96,7 +101,7 @@ always @(*) begin
     endcase
 end
 
-wire [8:0] data_mem_addr = {cpu_addr_ram_line, mem_word_idx};
+wire [8:0] data_mem_addr = {active_line, mem_word_idx};
 wire tag_mem_we = (state == REFILL && burst_active && (burst_cnt == 3'd7));
 
 // bsram
@@ -106,7 +111,7 @@ always @(posedge sys_clk) begin
         data_mem[data_mem_addr] <= data_mem_wdata;
     end
 
-    fetched_tag <= tag_mem[cpu_addr_ram_line];
+    fetched_tag <= tag_mem[active_line];
     if (tag_mem_we) begin
         tag_mem[cpu_addr_ram_line] <= cpu_addr_tag;
     end
@@ -126,13 +131,21 @@ if(!nrst) begin
     CPU_req_valid <= 1'b0;
     CPU_req_we <= 1'b0;
     CPU_req_addr <= 21'd0;
-    burst_cnt  <= 3'd0;
+    burst_cnt <= 3'd0;
     burst_active <= 1'b0;
+    flush_line <= 6'd0;
 end else begin
     cpu_ready <= 1'b0;
     case (state)
         IDLE: begin
-            if(cpu_valid && !cpu_ready) begin
+            if (cpu_flush && !cpu_ready) begin
+                if (tag_mem_dirty == 64'd0) begin
+                    cpu_ready <= 1'b1;
+                end else begin
+                    flush_line <= 6'd0;
+                    state <= FLUSH_SCAN;
+                end
+            end else if(cpu_valid && !cpu_ready) begin
                 state <= COMPARE;
             end
         end
@@ -200,6 +213,51 @@ end else begin
                     end
                 end
             end
+            FLUSH_SCAN: begin
+                if (tag_mem_valid[flush_line] && tag_mem_dirty[flush_line]) begin
+                    burst_cnt <= 3'd0;
+                    burst_active <= 1'b0;
+                    state <= FLUSH_PREP;
+                end else begin
+                    if (flush_line == 6'd63) begin
+                        cpu_ready <= 1'b1;
+                        state <= IDLE;
+                    end else begin
+                        flush_line <= flush_line + 6'd1;
+                    end
+                end
+            end
+
+            FLUSH_PREP: begin
+                CPU_req_valid <= 1'b1;
+                CPU_req_we <= 1'b1;
+                CPU_req_addr <= {fetched_tag[10:0], flush_line, 4'b0000};
+                state <= FLUSH_WB;
+            end
+
+            FLUSH_WB: begin
+                if (CPU_req_ready && !burst_active) begin
+                    CPU_req_valid <= 1'b0;
+                    burst_active <= 1'b1;
+                    burst_cnt <= 3'd1;
+                end else if (burst_active) begin
+                    if (burst_cnt == 3'd7) begin
+                        burst_active <= 1'b0;
+                        burst_cnt <= 3'd0;
+                        tag_mem_dirty[flush_line] <= 1'b0;
+                        if (flush_line == 6'd63) begin
+                            cpu_ready <= 1'b1;
+                            state <= IDLE;
+                        end else begin
+                            flush_line <= flush_line + 6'd1;
+                            state <= FLUSH_SCAN;
+                        end
+                    end else begin
+                        burst_cnt <= burst_cnt + 3'd1;
+                    end
+                end
+            end
+            default: begin end
     endcase
 
 

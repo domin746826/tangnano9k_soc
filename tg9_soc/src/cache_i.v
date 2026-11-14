@@ -9,13 +9,13 @@ module rocache (
     input wire cpu_valid,
     input wire [31:0] cpu_addr,
     input wire cpu_flush,
-    output reg [31:0] cpu_rdata,
-    output reg cpu_ready,
+    output wire [31:0] cpu_rdata,
+    output wire cpu_ready,
 
     // data-side ROM port (0x8000_0000..0x8000_1FFF)
     input wire drom_valid,
     input wire [31:0] drom_addr,
-    output wire [31:0] drom_rdata,
+    output reg [31:0] drom_rdata,
     output reg drom_ready,
 
     // arbitrer port ro
@@ -25,17 +25,10 @@ module rocache (
     input wire [63:0] CPU_read_data
 );
 
-// one cache line size 64 bytes
-// or 8 qwords
-// psram burst - 8 qwords
-// 64 lines in cache
-// total 512 qwords
-// 
-
-wire cpu_addr_nibble = cpu_addr[2]; // low/high nibble (for 0/1)
-wire [2:0] cpu_addr_offset = cpu_addr[5:3]; // which word in cache line
-wire [5:0] cpu_addr_ram_line = cpu_addr[11:6]; // which line in cache
-wire [19:0] cpu_addr_tag = cpu_addr[31:12]; // msb of real address
+wire cpu_addr_nibble = cpu_addr[2];
+wire [2:0] cpu_addr_offset = cpu_addr[5:3];
+wire [5:0] cpu_addr_ram_line = cpu_addr[11:6];
+wire [19:0] cpu_addr_tag = cpu_addr[31:12];
 
 reg [19:0] tag_mem[0:63];
 reg [63:0] tag_mem_valid;
@@ -48,19 +41,18 @@ reg [63:0] fetched_data;
 reg [31:0] fetched_rom;
 
 initial begin
-    // $readmemh("../../asm/ledtest1/bios.hex", bios_rom);
     $readmemh("../../asm/bios/bios.hex", bios_rom);
-
 end
 
 reg [1:0] state;
-localparam IDLE = 2'd0;
+localparam IDLE    = 2'd0;
 localparam COMPARE = 2'd1;
-localparam REFILL = 2'd2;
+localparam REFILL  = 2'd2;
 
 reg [2:0] burst_cnt;
 reg burst_active;
 
+wire is_rom = cpu_addr[31];
 wire is_hit = (cpu_addr_tag == fetched_tag) && tag_mem_valid[cpu_addr_ram_line];
 
 wire data_mem_we = (state == REFILL) && (CPU_req_ready || burst_active);
@@ -69,10 +61,9 @@ wire [2:0] mem_word_idx = (state == REFILL) ? burst_cnt : cpu_addr_offset;
 wire [8:0] data_mem_addr = {cpu_addr_ram_line, mem_word_idx};
 wire tag_mem_we = (state == REFILL && burst_active && (burst_cnt == 3'd7));
 
-wire [10:0] rom_word_addr = drom_valid ? drom_addr[12:2] : cpu_addr[12:2];
-assign drom_rdata = fetched_rom;
+assign cpu_ready = (state == COMPARE) && (is_rom || is_hit);
+assign cpu_rdata = is_rom ? fetched_rom : (cpu_addr_nibble ? fetched_data[63:32] : fetched_data[31:0]);
 
-// bsram
 always @(posedge sys_clk) begin
     fetched_data <= data_mem[data_mem_addr];
     if (data_mem_we) begin
@@ -84,41 +75,36 @@ always @(posedge sys_clk) begin
         tag_mem[cpu_addr_ram_line] <= cpu_addr_tag;
     end
 
-    fetched_rom <= bios_rom[rom_word_addr];
+    if (drom_valid) begin
+        drom_rdata <= bios_rom[drom_addr[12:2]];
+    end else begin
+        fetched_rom <= bios_rom[cpu_addr[12:2]];
+    end
 end
 
 always @(posedge sys_clk or negedge nrst) begin
 if (!nrst) begin
     state <= IDLE;
     tag_mem_valid <= 64'd0;
-    cpu_ready <= 1'b0;
-    cpu_rdata <= 32'd0;
     drom_ready <= 1'b0;
     CPU_req_valid <= 1'b0;
     CPU_req_addr <= 21'd0;
     burst_cnt <= 3'd0;
     burst_active <= 1'b0;
 end else begin
-    cpu_ready <= 1'b0;
     drom_ready <= drom_valid && !drom_ready;
 
     case (state)
         IDLE: begin
-            if(cpu_flush) begin
+            if (cpu_flush) begin
                 tag_mem_valid <= 64'd0;
-            end else if (cpu_valid && !cpu_ready && !drom_valid) begin
+            end else if (cpu_valid && !drom_valid) begin
                 state <= COMPARE;
             end
         end
 
         COMPARE: begin
-            if(cpu_addr[31]) begin
-                cpu_rdata <= fetched_rom;
-                cpu_ready <= 1'b1;
-                state <= IDLE;
-            end else if (is_hit) begin // HIT
-                cpu_rdata <= cpu_addr_nibble ? fetched_data[63:32] : fetched_data[31:0];
-                cpu_ready <= 1'b1;
+            if (is_rom || is_hit) begin // HIT
                 state <= IDLE;
             end else begin // MISS
                 burst_cnt <= 3'd0;

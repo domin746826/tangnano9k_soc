@@ -22,6 +22,7 @@ module cpu (
 );
 
 reg [31:0] PC;
+reg [31:0] PC_next;
 assign icpu_addr = PC;
 
 // instruction decomposition
@@ -56,14 +57,14 @@ wire [31:0] REGS_rs2_data;
 reg [31:0] REGS_rd_data;
 reg REGS_rd_we;
 
-reg [31:0] rs1_reg;
-reg [31:0] rs2_reg;
+// reg [31:0] REGS_rs1_data;
+// reg [31:0] REGS_rs2_data;
 reg [31:0] pc_branch_target;
-wire [31:0] store_addr = rs1_reg + imm_s; // SW
-wire [31:0] load_addr = rs1_reg + imm_i; // LW
+wire [31:0] store_addr = REGS_rs1_data + imm_s; // SW
+wire [31:0] load_addr = REGS_rs1_data + imm_i; // LW
 
-wire signed [32:0] mul_a = { (funct3 != 3'b011) & rs1_reg[31], rs1_reg };
-wire signed [32:0] mul_b = { (funct3 == 3'b001) & rs2_reg[31], rs2_reg };
+wire signed [32:0] mul_a = { (funct3 != 3'b011) & REGS_rs1_data[31], REGS_rs1_data };
+wire signed [32:0] mul_b = { (funct3 == 3'b001) & REGS_rs2_data[31], REGS_rs2_data };
 wire [65:0] mul_p_r;
 Gowin_MULT mult_inst (.clk(sys_clk), .ce(1'b1), .reset(1'b0),
                       .a(mul_a), .b(mul_b), .dout(mul_p_r));
@@ -74,7 +75,7 @@ wire div_done;
 wire [31:0] div_q, div_r;
 divider div_inst (
     .clk(sys_clk), .start(div_start), .is_signed(~funct3[0]),
-    .a(rs1_reg), .b(rs2_reg), .quo(div_q), .rem(div_r), .done(div_done)
+    .a(REGS_rs1_data), .b(REGS_rs2_data), .quo(div_q), .rem(div_r), .done(div_done)
 );
 reg [1:0] state;
 localparam FETCH = 0;
@@ -93,8 +94,8 @@ if(!nrst) begin
     dcpu_wdata <= 32'd0;
     dcpu_wstrb <= 4'd0;
     led <= 6'b111111;
-    rs1_reg <= 32'd0;
-    rs2_reg <= 32'd0;
+    // REGS_rs1_data <= 32'd0;
+    // REGS_rs2_data <= 32'd0;
     pc_branch_target <= 32'd0;
     mul_wait <= 0;
     div_start <= 0;
@@ -117,33 +118,34 @@ end else begin
 
         DECODE: begin
             pc_branch_target <= PC + imm_b;
-            rs1_reg <= REGS_rs1_data;
-            rs2_reg <= REGS_rs2_data;
+            PC_next <= PC + 4;
+            // REGS_rs1_data <= REGS_rs1_data;
+            // REGS_rs2_data <= REGS_rs2_data;
             state <= EXECUTE;
         end
 
         EXECUTE: begin
             REGS_rd_we <= 1;
             icpu_valid <= 1;
-            PC <= PC + 4;
+            PC <= PC_next;
             state <= FETCH;
             case(opcode)
                 ADDI_OP: begin
                     case(funct3)
                         // RV32I
-                        3'b000: REGS_rd_data <= rs1_reg + imm_i; // ADDI
-                        3'b010: REGS_rd_data <= $signed(rs1_reg) < $signed(imm_i)? 1:0;// SLTI
-                        3'b011: REGS_rd_data <= rs1_reg < imm_i? 1:0; // SLTIU
-                        3'b100: REGS_rd_data <= rs1_reg ^ imm_i; // XORI
-                        3'b001: REGS_rd_data <= rs1_reg << rs2_addr; // SLLI
+                        3'b000: REGS_rd_data <= REGS_rs1_data + imm_i; // ADDI
+                        3'b010: REGS_rd_data <= $signed(REGS_rs1_data) < $signed(imm_i)? 1:0;// SLTI
+                        3'b011: REGS_rd_data <= REGS_rs1_data < imm_i? 1:0; // SLTIU
+                        3'b100: REGS_rd_data <= REGS_rs1_data ^ imm_i; // XORI
+                        3'b001: REGS_rd_data <= REGS_rs1_data << rs2_addr; // SLLI
                         3'b101: begin // SRAI / SRLI
                             if (funct7[5])
-                                REGS_rd_data <= $signed(rs1_reg) >>> rs2_addr;
+                                REGS_rd_data <= $signed(REGS_rs1_data) >>> rs2_addr;
                             else
-                                REGS_rd_data <= rs1_reg >> rs2_addr;
+                                REGS_rd_data <= REGS_rs1_data >> rs2_addr;
                         end
-                        3'b110: REGS_rd_data <= rs1_reg | imm_i; // ORI
-                        3'b111: REGS_rd_data <= rs1_reg & imm_i; // ANDI
+                        3'b110: REGS_rd_data <= REGS_rs1_data | imm_i; // ORI
+                        3'b111: REGS_rd_data <= REGS_rs1_data & imm_i; // ANDI
                         default: REGS_rd_data <= 0;
                     endcase
 
@@ -152,7 +154,7 @@ end else begin
                 SW_OP: begin
                     REGS_rd_we <= 0;
                     if(store_addr[31:30] == 2'b11) begin // 0xC000_0000 - MMIO
-                        led <= rs2_reg[5:0];
+                        led <= REGS_rs2_data[5:0];
                     end else begin // mem
                         PC <= PC; // stall for write
                         state <= MEM;
@@ -161,15 +163,15 @@ end else begin
                         dcpu_addr <= {store_addr[31:2], 2'd0};
                         case(funct3)
                             3'b000: begin // SB
-                                dcpu_wdata <= {4{rs2_reg[7:0]}};
+                                dcpu_wdata <= {4{REGS_rs2_data[7:0]}};
                                 dcpu_wstrb <= 4'b0001 << store_addr[1:0];
                             end
                             3'b001: begin // SH
-                                dcpu_wdata <= {2{rs2_reg[15:0]}};
+                                dcpu_wdata <= {2{REGS_rs2_data[15:0]}};
                                 dcpu_wstrb <= store_addr[1]? 4'b1100:4'b0011;
                             end
                             3'b010: begin // SW
-                                dcpu_wdata <= rs2_reg;
+                                dcpu_wdata <= REGS_rs2_data;
                                 dcpu_wstrb <= 4'b1111;
                             end
                         endcase
@@ -178,7 +180,7 @@ end else begin
                 LW_OP: begin
                     REGS_rd_we <= 0;
                     if(load_addr[31:30] == 2'b11) begin // 0xC000_0000 - MMIO
-                        // led <= rs2_reg[5:0];
+                        // led <= REGS_rs2_data[5:0];
                     end else begin // mem
                         PC <= PC; // stall for read
                         state <= MEM;
@@ -207,7 +209,7 @@ end else begin
                             div_started <= 1'b0;
                             REGS_rd_we <= 1'b1;
                             icpu_valid <= 1'b1;
-                            PC <= PC + 4;
+                            PC <= PC_next;
                             state <= FETCH;
                             REGS_rd_data <= funct3[1] ? div_r : div_q; // REM/REMU : DIV/DIVU
                         end
@@ -222,7 +224,7 @@ end else begin
                             mul_wait <= 2'd0;
                             REGS_rd_we <= 1'b1;
                             icpu_valid <= 1'b1;
-                            PC <= PC + 4;
+                            PC <= PC_next;
                             state <= FETCH;
                             case(funct3)
                                 3'b000:  REGS_rd_data <= mul_p_r[31:0];  // MUL
@@ -234,19 +236,19 @@ end else begin
                         end
                     end else begin
                         case(funct3)
-                            3'b000: REGS_rd_data <= funct7[5] ? (rs1_reg - rs2_reg) : (rs1_reg + rs2_reg); // SUB / ADD
-                            3'b001: REGS_rd_data <= rs1_reg << rs2_reg[4:0]; // SLL
-                            3'b010: REGS_rd_data <= ($signed(rs1_reg) < $signed(rs2_reg)) ? 32'd1 : 32'd0; // SLT
-                            3'b011: REGS_rd_data <= (rs1_reg < rs2_reg) ? 32'd1 : 32'd0; // SLTU
-                            3'b100: REGS_rd_data <= rs1_reg ^ rs2_reg; // XOR
+                            3'b000: REGS_rd_data <= funct7[5] ? (REGS_rs1_data - REGS_rs2_data) : (REGS_rs1_data + REGS_rs2_data); // SUB / ADD
+                            3'b001: REGS_rd_data <= REGS_rs1_data << REGS_rs2_data[4:0]; // SLL
+                            3'b010: REGS_rd_data <= ($signed(REGS_rs1_data) < $signed(REGS_rs2_data)) ? 32'd1 : 32'd0; // SLT
+                            3'b011: REGS_rd_data <= (REGS_rs1_data < REGS_rs2_data) ? 32'd1 : 32'd0; // SLTU
+                            3'b100: REGS_rd_data <= REGS_rs1_data ^ REGS_rs2_data; // XOR
                             3'b101: begin // SRA / SRL
                                 if (funct7[5])
-                                    REGS_rd_data <= $signed(rs1_reg) >>> rs2_reg[4:0];
+                                    REGS_rd_data <= $signed(REGS_rs1_data) >>> REGS_rs2_data[4:0];
                                 else
-                                    REGS_rd_data <= rs1_reg >> rs2_reg[4:0];
+                                    REGS_rd_data <= REGS_rs1_data >> REGS_rs2_data[4:0];
                             end
-                            3'b110: REGS_rd_data <= rs1_reg | rs2_reg; // OR
-                            3'b111: REGS_rd_data <= rs1_reg & rs2_reg; // AND
+                            3'b110: REGS_rd_data <= REGS_rs1_data | REGS_rs2_data; // OR
+                            3'b111: REGS_rd_data <= REGS_rs1_data & REGS_rs2_data; // AND
                             default: REGS_rd_data <= 32'd0;
                         endcase
                     end
@@ -257,18 +259,18 @@ end else begin
                     REGS_rd_data <= PC + 32'd4;
                 end
                 JALR_OP: begin
-                    PC <= (rs1_reg + imm_i) & ~32'd1;
+                    PC <= (REGS_rs1_data + imm_i) & ~32'd1;
                     REGS_rd_data <= PC + 32'd4;
                 end
                 BEQ_OP: begin
                     REGS_rd_we <= 0;
                     case(funct3)
-                        3'b000: if (rs1_reg == rs2_reg) PC <= pc_branch_target; // BEQ
-                        3'b001: if (rs1_reg != rs2_reg) PC <= pc_branch_target; // BNE
-                        3'b100: if ($signed(rs1_reg) < $signed(rs2_reg)) PC <= pc_branch_target; // BLT
-                        3'b101: if ($signed(rs1_reg) >= $signed(rs2_reg))PC <= pc_branch_target; // BGE
-                        3'b110: if (rs1_reg < rs2_reg) PC <= pc_branch_target; // BLTU
-                        3'b111: if (rs1_reg >= rs2_reg) PC <= pc_branch_target; // BGEU
+                        3'b000: if (REGS_rs1_data == REGS_rs2_data) PC <= pc_branch_target; // BEQ
+                        3'b001: if (REGS_rs1_data != REGS_rs2_data) PC <= pc_branch_target; // BNE
+                        3'b100: if ($signed(REGS_rs1_data) < $signed(REGS_rs2_data)) PC <= pc_branch_target; // BLT
+                        3'b101: if ($signed(REGS_rs1_data) >= $signed(REGS_rs2_data))PC <= pc_branch_target; // BGE
+                        3'b110: if (REGS_rs1_data < REGS_rs2_data) PC <= pc_branch_target; // BLTU
+                        3'b111: if (REGS_rs1_data >= REGS_rs2_data) PC <= pc_branch_target; // BGEU
                     endcase
                 end
                 FENCE_OP: begin
@@ -288,7 +290,7 @@ end else begin
                 dcpu_valid <= 1'b0;
                 dcpu_flush <= 1'b0;
                 dcpu_wstrb <= 4'd0;
-                PC <= PC + 4; // resume
+                PC <= PC_next; // resume
                 icpu_valid <= 1'b1;
                 state <= FETCH;
                 if(opcode == LW_OP) begin
