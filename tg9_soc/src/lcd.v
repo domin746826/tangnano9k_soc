@@ -194,7 +194,10 @@ module lcd_driver #(
     output reg         LCD_req_valid,
     input  wire        LCD_req_ready,
     output reg  [20:0] LCD_req_addr,
-    input  wire [63:0] LCD_read_data
+    input  wire [63:0] LCD_read_data,
+
+    output wire [8:0] fb_line,
+    input wire [31:0] FBCTRL_reg
 );
 
 // --- TIMINGI 480x272 @ 60Hz, 9MHz ---
@@ -212,6 +215,8 @@ localparam BURSTS_PER_FRAME = (H_ACTIVE * V_ACTIVE) / 32;   // 4080 (= 16 * 255,
 localparam PRIME_BURSTS     = 8;                            // tyle burstow w buforze zanim ruszy obraz
 
 assign lcd_clk = clk_lcd;
+wire fb_en = FBCTRL_reg[31];
+wire [20:0] fb_base_addr = FBCTRL_reg[22:2];
 
 // ---------------------------------------------------------------
 // bufor pierscieniowy: 16 burstow x 8 qwordow = 128 x 64 bit (512 pikseli)
@@ -275,10 +280,17 @@ always @(posedge sys_clk or negedge nrst) begin
         LCD_req_addr  <= 21'd0;
     end else begin
         if (cool != 3'd0) cool <= cool - 3'd1;
-        if (wr_cnt >= PRIME_BURSTS) primed <= 1'b1;
+        if (fb_en && (wr_cnt >= PRIME_BURSTS)) primed <= 1'b1;
 
         case (state)
             S_IDLE: begin
+                if(!fb_en) begin
+                    wr_cnt <= 5'd0;
+                    frame_burst <= 12'd0;
+                    fb_addr <= fb_base_addr;
+                    primed <= 1'b0;
+                    LCD_req_valid <= 1'b0;
+                end else
                 // jest wolny slot w ringu i minela przerwa po poprzednim burscie
                 if (fill != 5'd16 && cool == 3'd0) begin
                     LCD_req_valid <= 1'b1;
@@ -298,7 +310,7 @@ always @(posedge sys_clk or negedge nrst) begin
                         state  <= S_IDLE;
                         if (frame_burst == BURSTS_PER_FRAME - 1) begin
                             frame_burst <= 12'd0;
-                            fb_addr     <= FB_BASE;
+                            fb_addr     <= fb_base_addr;
                         end else begin
                             frame_burst <= frame_burst + 12'd1;
                             fb_addr     <= fb_addr + 21'd16;
@@ -324,9 +336,12 @@ always @(posedge clk_lcd or negedge nrst) begin
     end
 end
 
-reg [9:0] h_cnt;
-reg [8:0] v_cnt;
-reg [8:0] pix_cnt;      // pozycja w ringu w pikselach (512, zawija sie dokladnie co 255 ramek*...: 130560 = 255*512)
+reg [9:0] h_cnt = 10'd0;
+reg [8:0] v_cnt = 9'd0;
+reg [8:0] pix_cnt = 9'd0;
+reg       frame_active = 1'b0; // czeka na poczatek ramki (0,0) po wlaczeniu run_s2
+
+assign fb_line = v_cnt;
 
 wire active = (h_cnt < H_ACTIVE) && (v_cnt < V_ACTIVE);
 wire hs_c   = ~((h_cnt >= H_ACTIVE + H_FP) && (h_cnt < H_ACTIVE + H_FP + H_SYNC));
@@ -341,7 +356,7 @@ always @(posedge clk_lcd) begin
 end
 
 reg [1:0] lane_q;
-reg       act_q, hs_q, vs_q;
+reg       act_q, de_q, hs_q, vs_q;
 
 reg [15:0] px;
 always @(*) begin
@@ -353,53 +368,48 @@ always @(*) begin
     endcase
 end
 
-always @(posedge clk_lcd or negedge nrst) begin
-    if (!nrst) begin
-        h_cnt      <= 10'd0;
-        v_cnt      <= 9'd0;
-        pix_cnt    <= 9'd0;
-        rd_cnt     <= 5'd0;
-        rd_gray    <= 5'd0;
-        lane_q     <= 2'd0;
-        act_q      <= 1'b0;
-        hs_q       <= 1'b1;
-        vs_q       <= 1'b1;
-        color_port <= 16'd0;
-        hsync      <= 1'b1;
-        vsync      <= 1'b1;
-        de         <= 1'b0;
+// Generator timingow HSYNC/VSYNC chodzi ZAWSZE (nawet podczas nrst=0 i fb_en=0!),
+// zeby ekran LCD nigdy nie wchodzil w swoj wbudowany tryb Self-Test (BIST)!
+always @(posedge clk_lcd) begin
+    if (h_cnt < H_TOTAL - 1) begin
+        h_cnt <= h_cnt + 10'd1;
     end else begin
-        if (run_s2) begin
-            // generator timingow
-            if (h_cnt < H_TOTAL - 1) h_cnt <= h_cnt + 10'd1;
-            else begin
-                h_cnt <= 10'd0;
-                if (v_cnt < V_TOTAL - 1) v_cnt <= v_cnt + 9'd1;
-                else v_cnt <= 9'd0;
-            end
-
-            // konsumpcja pikseli
-            if (active) begin
-                pix_cnt <= pix_cnt + 9'd1;
-                if (pix_cnt[4:0] == 5'd31) begin        // ostatni piksel burstu => slot wolny
-                    rd_cnt  <= rd_cnt_n;
-                    rd_gray <= rd_cnt_n ^ (rd_cnt_n >> 1);
-                end
-            end
+        h_cnt <= 10'd0;
+        if (v_cnt < V_TOTAL - 1) begin
+            v_cnt <= v_cnt + 9'd1;
+        end else begin
+            v_cnt <= 9'd0;
+            // Startujemy wyswietlanie z bufora idealnie na poczatku nowej klatki (0,0)!
+            frame_active <= run_s2;
         end
-
-        // stopien A: adres poszedl do BSRAM, czekamy na dane
-        lane_q <= pix_cnt[1:0];
-        act_q  <= active && run_s2;
-        hs_q   <= hs_c;
-        vs_q   <= vs_c;
-
-        // stopien B: wyjscie (wszystko opoznione tak samo)
-        color_port <= act_q ? px : 16'd0;
-        de         <= act_q;
-        hsync      <= hs_q;
-        vsync      <= vs_q;
     end
+
+    if (!nrst || !run_s2) begin
+        frame_active <= 1'b0;
+        pix_cnt      <= 9'd0;
+        rd_cnt       <= 5'd0;
+        rd_gray      <= 5'd0;
+    end else if (frame_active && active) begin
+        // konsumpcja pikseli z bufora tylko gdy ekran wlaczony i zsynchronizowany z ramka
+        pix_cnt <= pix_cnt + 9'd1;
+        if (pix_cnt[4:0] == 5'd31) begin        // ostatni piksel burstu => slot wolny
+            rd_cnt  <= rd_cnt_n;
+            rd_gray <= rd_cnt_n ^ (rd_cnt_n >> 1);
+        end
+    end
+
+    // stopien A: adres poszedl do BSRAM, czekamy na dane
+    lane_q <= pix_cnt[1:0];
+    act_q  <= active && frame_active;
+    de_q   <= active;
+    hs_q   <= hs_c;
+    vs_q   <= vs_c;
+
+    // stopien B: wyjscie (HSYNC, VSYNC i DE chodza zawsze, a kolor = 0 gdy wylaczone)
+    color_port <= act_q ? px : 16'd0;
+    de         <= de_q;
+    hsync      <= hs_q;
+    vsync      <= vs_q;
 end
 
 endmodule

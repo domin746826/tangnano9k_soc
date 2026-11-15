@@ -47,7 +47,7 @@ wire sys_nrst = btn1;
 reg [3:0] rst_sh;
 always @(posedge sys_clk or negedge sys_nrst)
     if (!sys_nrst) rst_sh <= 4'd0;
-    else           rst_sh <= {rst_sh[2:0], PSRAM_init_calib};
+    else rst_sh <= {rst_sh[2:0], PSRAM_init_calib};
 wire nrst = rst_sh[3];
 
 // cache_d / rom <=> cpu
@@ -96,6 +96,9 @@ wire [31:0] mmio_data_in;
 wire [3:0] mmio_wstrb;
 wire [31:0] mmio_data_out;
 
+wire [8:0] fb_line;
+wire [31:0] FBCTRL_reg;
+
 mmio mmio_inst (
     .sys_clk(sys_clk),
     .nrst(nrst),
@@ -107,8 +110,11 @@ mmio mmio_inst (
     .led(led),
     .btn(btn2),
     .uart_tx(uartTx),
-    .uart_rx(uartRx)
+    .uart_rx(uartRx),
+    .fb_line(fb_line),
+    .FBCTRL_reg(FBCTRL_reg)
 );
+
 
 // CPU GOES HERE
 
@@ -180,7 +186,9 @@ lcd_driver lcd_inst(
     .LCD_req_valid(LCD_req_valid),
     .LCD_req_ready(LCD_req_ready),
     .LCD_req_addr(LCD_req_addr),
-    .LCD_read_data(LCD_read_data)
+    .LCD_read_data(LCD_read_data),
+    .fb_line(fb_line),
+    .FBCTRL_reg(FBCTRL_reg)
 );
 
 
@@ -262,17 +270,17 @@ psram_wrapper psram_wrapper_inst (
 );
 
 
- rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
-  .FCLKIN("27"),
-  .IDIV_SEL(8), // -> PFD = 3 MHz (range: 3-400 MHz)
-  .FBDIV_SEL(43), // -> CLKOUT = 132 MHz (range: 3.125-600 MHz)
-  .DYN_SDIV_SEL(16),   .ODIV_SEL(4) // -> VCO = 528 MHz (range: 400-1200 MHz)
-) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
-  .CLKIN(in_clk), // 27 MHz
-  .CLKOUT(psram_clk), // 132 MHz
-  .CLKOUTD(lcd_clk), // 8.25 MHz
-  .LOCK(clk_lock)
-);
+//  rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
+//   .FCLKIN("27"),
+//   .IDIV_SEL(8), // -> PFD = 3 MHz (range: 3-400 MHz)
+//   .FBDIV_SEL(43), // -> CLKOUT = 132 MHz (range: 3.125-600 MHz)
+//   .DYN_SDIV_SEL(16),   .ODIV_SEL(4) // -> VCO = 528 MHz (range: 400-1200 MHz)
+// ) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
+//   .CLKIN(in_clk), // 27 MHz
+//   .CLKOUT(psram_clk), // 132 MHz
+//   .CLKOUTD(lcd_clk), // 8.25 MHz
+//   .LOCK(clk_lock)
+// );
 
 // rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
 //   .FCLKIN("27"),
@@ -311,17 +319,17 @@ psram_wrapper psram_wrapper_inst (
 //   .LOCK(clk_lock)
 // );
 
-// rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
-//   .FCLKIN("27"),
-//   .IDIV_SEL(8), // -> PFD = 3 MHz (range: 3-400 MHz)
-//   .FBDIV_SEL(39), // -> CLKOUT = 120 MHz (range: 3.125-600 MHz)
-//   .DYN_SDIV_SEL(12),   .ODIV_SEL(4) // -> VCO = 480 MHz (range: 400-1200 MHz)
-// ) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
-//   .CLKIN(in_clk), // 27 MHz
-//   .CLKOUT(psram_clk), // 120 MHz
-//   .CLKOUTD(lcd_clk), // 10 MHz
-//   .LOCK(clk_lock)
-// );
+rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
+  .FCLKIN("27"),
+  .IDIV_SEL(8), // -> PFD = 3 MHz (range: 3-400 MHz)
+  .FBDIV_SEL(39), // -> CLKOUT = 120 MHz (range: 3.125-600 MHz)
+  .DYN_SDIV_SEL(12),   .ODIV_SEL(4) // -> VCO = 480 MHz (range: 400-1200 MHz)
+) pll (.CLKOUTP(), .CLKOUTD3(), .RESET(1'b0), .RESET_P(1'b0), .CLKFB(1'b0), .FBDSEL(6'b0), .IDSEL(6'b0), .ODSEL(6'b0), .PSDA(4'b0), .DUTYDA(4'b0), .FDLY(4'b0),
+  .CLKIN(in_clk), // 27 MHz
+  .CLKOUT(psram_clk), // 120 MHz
+  .CLKOUTD(lcd_clk), // 10 MHz
+  .LOCK(clk_lock)
+);
 
 // rPLL #( // For GW1NR-9C C6/I5 (Tang Nano 9K proto dev board)
 //   .FCLKIN("27"),
