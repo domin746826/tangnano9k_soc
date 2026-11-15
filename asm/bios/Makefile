@@ -1,5 +1,5 @@
 # Narzędzia toolchaina (zmień prefiks na riscv64-unknown-elf- jeśli takiego używasz w CachyOS/Archu)
-CROSS   ?= riscv-none-elf-
+CROSS   ?= riscv64-elf-
 CC       = $(CROSS)gcc
 OBJCOPY  = $(CROSS)objcopy
 OBJDUMP  = $(CROSS)objdump
