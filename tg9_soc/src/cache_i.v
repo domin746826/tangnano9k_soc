@@ -35,7 +35,7 @@ reg [63:0] data_mem[0:511];
 reg [19:0] fetched_tag;
 reg [63:0] fetched_data;
 
-(* ram_style="block" *) reg [31:0] bios_rom [0:2047]; // 8 KB
+(* ram_style="block" *) reg [31:0] bios_rom [0:511]; // 2 KB
 reg [31:0] fetched_rom;
 
 initial begin
@@ -72,9 +72,9 @@ always @(posedge sys_clk) begin
     end
 
     if (drom_valid) begin
-        drom_rdata <= bios_rom[drom_addr[12:2]];
+        drom_rdata <= bios_rom[drom_addr[10:2]];
     end else begin
-        fetched_rom <= bios_rom[cpu_addr[12:2]];
+        fetched_rom <= bios_rom[cpu_addr[10:2]];
     end
 end
 

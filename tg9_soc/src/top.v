@@ -19,7 +19,12 @@ module top (
     input wire btn1,
     input wire btn2,
     output wire uartTx,
-    input wire uartRx
+    input wire uartRx,
+
+    output wire sdClk,
+    output wire sdMosi,
+    input wire sdMiso,
+    output wire sdCs
 );
 
 // WRAPPER PSRAM
@@ -112,7 +117,12 @@ mmio mmio_inst (
     .uart_tx(uartTx),
     .uart_rx(uartRx),
     .fb_line(fb_line),
-    .FBCTRL_reg(FBCTRL_reg)
+    .FBCTRL_reg(FBCTRL_reg),
+
+    .SPI_sck(sdClk),
+    .SPI_mosi(sdMosi),
+    .SPI_miso(sdMiso),
+    .SPI_cs_n(sdCs)
 );
 
 

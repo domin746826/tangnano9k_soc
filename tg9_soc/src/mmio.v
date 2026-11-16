@@ -11,7 +11,12 @@ module mmio (
     output wire uart_tx,
     input  wire uart_rx,
     input wire [8:0] fb_line,
-    output reg [31:0] FBCTRL_reg
+    output reg [31:0] FBCTRL_reg,
+
+    output wire SPI_sck,
+    output wire SPI_mosi,
+    input wire SPI_miso,
+    output wire SPI_cs_n
 );
 
 localparam LED_REG = 32'hC000_0000;
@@ -25,6 +30,8 @@ localparam BIOSFLASH_DIN = 32'hC000_001C;
 localparam TIMER_US = 32'hC000_0020;
 localparam MTIME_LO = 32'hC000_0024;
 localparam MTIME_HI = 32'hC000_0028;
+localparam SPI_CTRL = 32'hC000_002C; // [31:16] SPI_div [2] SPI_cs (1=active/low) [1] SPI_busy [0] SPI_en
+localparam SPI_DATA = 32'hC000_0030; // [15:8] SPI_data_out [7:0] SPI_data_in, write to SPI_data_out initiates transfer, out&in swapped for dev
 
 reg [5:0] us_prescaler;
 reg [31:0] timer_us_reg;
@@ -35,6 +42,13 @@ reg UART_tx_start;
 wire UART_tx_rdy;
 wire [7:0] UART_rx_data;
 wire UART_rx_valid;
+
+wire [7:0] SPI_data_out;
+reg [31:0] SPI_CTRL_reg;
+reg [31:0] SPI_DATA_reg;
+wire SPI_busy;
+reg SPI_start;
+
 
 // reg [31:0] fastsram[0:4095];
 
@@ -75,6 +89,9 @@ always @(posedge sys_clk) begin
         timer_us_reg <= 32'd0;
         mtime_reg <= 64'd0;
         BIOSFLASH_ctrl_reg <= 32'd0;
+        SPI_CTRL_reg <= 32'd0;
+        SPI_DATA_reg <= 32'd0;
+        SPI_start <= 1'd0;
     end else begin
         mtime_reg <= mtime_reg + 64'd1;
         if (us_prescaler == 6'd59) begin
@@ -84,6 +101,7 @@ always @(posedge sys_clk) begin
             us_prescaler <= us_prescaler + 6'd1;
         end
         UART_tx_start <= 1'b0;
+        SPI_start <= 1'd0;
         if (|wstrb) begin
             case ({addr[31:2], 2'b00})
                 LED_REG: begin
@@ -127,6 +145,22 @@ always @(posedge sys_clk) begin
                     if (wstrb[2]) BIOSFLASH_din_reg[23:16] <= data_in[23:16];
                     if (wstrb[3]) BIOSFLASH_din_reg[31:24] <= data_in[31:24];
                 end
+
+                SPI_DATA: begin
+                    if (wstrb[1]) begin
+                        SPI_DATA_reg[15:8] <= data_in[15:8];
+                        SPI_start <= 1'd1;
+                    end
+                end
+                SPI_CTRL: begin
+                    if (wstrb[0]) begin
+                        SPI_CTRL_reg[0] <= data_in[0]; // SPI_EN
+                        SPI_CTRL_reg[2] <= data_in[2]; // SPI_CS
+                    end
+                    if (wstrb[2]) SPI_CTRL_reg[23:16] <= data_in[23:16];
+                    if (wstrb[3]) SPI_CTRL_reg[31:24] <= data_in[31:24];
+                end
+
                 default: begin end
             endcase
         end
@@ -148,6 +182,8 @@ always @(posedge sys_clk) begin
             BIOSFLASH_DOUT: data_out <= dout;
             MTIME_LO: data_out <= mtime_reg[31:0];
             MTIME_HI: data_out <= mtime_reg[63:32];
+            SPI_DATA: data_out <= {16'd0, SPI_DATA_reg[15:8], SPI_data_out};
+            SPI_CTRL: data_out <= {SPI_CTRL_reg[31:16], 13'd0, SPI_CTRL_reg[2], (SPI_busy || SPI_start), SPI_CTRL_reg[0]};
             default: data_out <= 32'd0;
         endcase
     end
@@ -182,6 +218,25 @@ uart_core uart_inst (
     .rx_data(UART_rx_data),
     .rx_valid(UART_rx_valid),
     .uart_rx(uart_rx)
+);
+
+spi spi_inst (
+    .sys_clk(sys_clk),
+    .nrst(nrst),
+
+    .en(SPI_CTRL_reg[0]),
+    .cs_en(SPI_CTRL_reg[2]),
+    .start(SPI_start),
+    .clk_div(SPI_CTRL_reg[31:16]),
+    .data_in(SPI_DATA_reg[15:8]),
+    .data_out(SPI_data_out),
+    .busy(SPI_busy),
+    .done(),
+
+    .sck(SPI_sck),
+    .mosi(SPI_mosi),
+    .miso(SPI_miso),
+    .cs_n(SPI_cs_n)
 );
 
 endmodule
