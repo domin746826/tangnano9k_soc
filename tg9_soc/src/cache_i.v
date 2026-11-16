@@ -1,5 +1,3 @@
-// i cache
-
 module rocache (
     // system
     input wire sys_clk,
@@ -9,8 +7,8 @@ module rocache (
     input wire cpu_valid,
     input wire [31:0] cpu_addr,
     input wire cpu_flush,
-    output wire [31:0] cpu_rdata,
-    output wire cpu_ready,
+    output reg [31:0] cpu_rdata,
+    output reg cpu_ready,
 
     // data-side ROM port (0x8000_0000..0x8000_1FFF)
     input wire drom_valid,
@@ -51,6 +49,7 @@ localparam REFILL  = 2'd2;
 
 reg [2:0] burst_cnt;
 reg burst_active;
+reg flush_pending;
 
 wire is_rom = cpu_addr[31];
 wire is_hit = (cpu_addr_tag == fetched_tag) && tag_mem_valid[cpu_addr_ram_line];
@@ -60,9 +59,6 @@ wire [2:0] mem_word_idx = (state == REFILL) ? burst_cnt : cpu_addr_offset;
 
 wire [8:0] data_mem_addr = {cpu_addr_ram_line, mem_word_idx};
 wire tag_mem_we = (state == REFILL && burst_active && (burst_cnt == 3'd7));
-
-assign cpu_ready = (state == COMPARE) && (is_rom || is_hit);
-assign cpu_rdata = is_rom ? fetched_rom : (cpu_addr_nibble ? fetched_data[63:32] : fetched_data[31:0]);
 
 always @(posedge sys_clk) begin
     fetched_data <= data_mem[data_mem_addr];
@@ -86,25 +82,40 @@ always @(posedge sys_clk or negedge nrst) begin
 if (!nrst) begin
     state <= IDLE;
     tag_mem_valid <= 64'd0;
+    cpu_ready <= 1'b0;
+    cpu_rdata <= 32'd0;
     drom_ready <= 1'b0;
     CPU_req_valid <= 1'b0;
     CPU_req_addr <= 21'd0;
     burst_cnt <= 3'd0;
     burst_active <= 1'b0;
+    flush_pending <= 1'b0;
 end else begin
+    cpu_ready <= 1'b0;
     drom_ready <= drom_valid && !drom_ready;
+
+    if (cpu_flush) begin
+        flush_pending <= 1'b1;
+    end
 
     case (state)
         IDLE: begin
-            if (cpu_flush) begin
+            if (cpu_flush || flush_pending) begin
                 tag_mem_valid <= 64'd0;
-            end else if (cpu_valid && !drom_valid) begin
+                flush_pending <= 1'b0;
+            end else if (cpu_valid && !cpu_ready && !drom_valid) begin
                 state <= COMPARE;
             end
         end
 
         COMPARE: begin
-            if (is_rom || is_hit) begin // HIT
+            if (is_rom) begin
+                cpu_rdata <= fetched_rom;
+                cpu_ready <= 1'b1;
+                state <= IDLE;
+            end else if (is_hit) begin
+                cpu_rdata <= cpu_addr_nibble ? fetched_data[63:32] : fetched_data[31:0];
+                cpu_ready <= 1'b1;
                 state <= IDLE;
             end else begin // MISS
                 burst_cnt <= 3'd0;

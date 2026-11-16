@@ -60,7 +60,7 @@ wire [31:0] dcache_rdata;
 wire dcache_ready;
 wire [31:0] drom_rdata;
 wire drom_ready;
-wire dcpu_is_rom = dcpu_addr[31];
+wire dcpu_is_rom = dcpu_addr[31] && !dcpu_flush;
 wire [31:0] dcpu_rdata = dcpu_is_rom ? drom_rdata : dcache_rdata;
 wire dcpu_ready = dcpu_is_rom ? drom_ready : dcache_ready;
 

@@ -43,7 +43,7 @@ reg [63:0] data_mem[0:511];
 reg [19:0] fetched_tag;
 reg [63:0] fetched_data;
 
-
+reg flush_tag_ready;
 reg [2:0] state;
 localparam IDLE = 3'd0;
 localparam COMPARE = 3'd1;
@@ -134,6 +134,7 @@ if(!nrst) begin
     burst_cnt <= 3'd0;
     burst_active <= 1'b0;
     flush_line <= 6'd0;
+    flush_tag_ready <= 1'b0;
 end else begin
     cpu_ready <= 1'b0;
     case (state)
@@ -217,6 +218,7 @@ end else begin
                 if (tag_mem_valid[flush_line] && tag_mem_dirty[flush_line]) begin
                     burst_cnt <= 3'd0;
                     burst_active <= 1'b0;
+                    flush_tag_ready <= 1'b0;
                     state <= FLUSH_PREP;
                 end else begin
                     if (flush_line == 6'd63) begin
@@ -229,10 +231,14 @@ end else begin
             end
 
             FLUSH_PREP: begin
-                CPU_req_valid <= 1'b1;
-                CPU_req_we <= 1'b1;
-                CPU_req_addr <= {fetched_tag[10:0], flush_line, 4'b0000};
-                state <= FLUSH_WB;
+                if (!flush_tag_ready) begin
+                    flush_tag_ready <= 1'b1;
+                end else begin
+                    CPU_req_valid <= 1'b1;
+                    CPU_req_we <= 1'b1;
+                    CPU_req_addr <= {fetched_tag[10:0], flush_line, 4'b0000};
+                    state <= FLUSH_WB;
+                end
             end
 
             FLUSH_WB: begin
