@@ -1,0 +1,18 @@
+-d /home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/impl/gwsynthesis/tg9_soc.vg
+-p GW1NR-9C-QFN88P-6
+-pn GW1NR-LV9QN88PC6/I5
+-cst /home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/tangnano9k.cst
+-cfg /home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/impl/pnr/device.cfg
+-sdc /home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/tg9_soc.sdc
+-bit
+-tr
+-ph
+-timing
+-cst_error
+-convert_sdp32_36_to_sdp16_18
+-place_option 2
+-route_option 1
+-clock_route_order 1
+-correct_hold 1
+-route_maxfan 40
+-global_freq 50.000

@@ -4,18 +4,31 @@
     <Version>beta</Version>
     <Device id="GW1NR-9C" package="QFN88P" speed="6" partNumber="GW1NR-LV9QN88PC6/I5"/>
     <FileList>
-        <File path="/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_memory_interface_hs/psram_memory_interface_hs.v" type="verilog"/>
-        <File path="/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_selftest.v" type="verilog"/>
-        <File path="/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/psram_wrapper.v" type="verilog"/>
-        <File path="/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/src/top.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/arbitrer.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/cache.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/cache_i.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/cpu.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/div.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/gowin_mult/gowin_mult.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/gowin_user_flash/gowin_user_flash.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/lcd.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/mmio.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/psram_memory_interface_hs/psram_memory_interface_hs.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/psram_wrapper.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/registers.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/top.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/uart.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/vram.v" type="verilog"/>
+        <File path="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/src/spi.v" type="verilog"/>
     </FileList>
     <OptionList>
         <Option type="disable_insert_pad" value="0"/>
         <Option type="global_freq" value="50.000"/>
         <Option type="looplimit" value="2000"/>
-        <Option type="output_file" value="/home/domin/Dokumenty/projects_msi/tangnano9k_soc/tg9_soc/impl/gwsynthesis/tg9_soc.vg"/>
+        <Option type="output_file" value="/home/domin/Dokumenty/projects/tangnano9k_soc/tg9_soc/impl/gwsynthesis/tg9_soc.vg"/>
         <Option type="print_all_synthesis_warning" value="0"/>
         <Option type="ram_rw_check" value="0"/>
+        <Option type="top_module" value="top"/>
         <Option type="vcc" value="1.2"/>
         <Option type="verilog_language" value="verilog-2001"/>
         <Option type="vhdl_language" value="vhdl-1993"/>
