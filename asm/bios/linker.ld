@@ -3,19 +3,15 @@ ENTRY(_start)
 
 MEMORY
 {
-    /* 8 KB BSRAM ROM pod 0x80000000 */
-    ROM   (rx)  : ORIGIN = 0x80000000, LENGTH = 8K
-
-    /* PSRAM na zmienne i stos (pierwszy 1 MB, a wyżej np. od 0x00100000 framebuffer) */
+    ROM   (rx)  : ORIGIN = 0x80000000, LENGTH = 2K
     PSRAM (rwx) : ORIGIN = 0x00000000, LENGTH = 1M
 }
 
 SECTIONS
 {
-    /* Kod programu i stałe lecą do 8 KB ROM */
     .text : ALIGN(4)
     {
-        KEEP(*(.text.init))   /* _start musi być dokładnie pod 0x80000000 */
+        KEEP(*(.text.init))
         *(.text*)
         *(.rodata*)
         *(.srodata*)
@@ -23,7 +19,6 @@ SECTIONS
         _etext = .;
     } > ROM
 
-    /* Wartości początkowe zmiennych globalnych leżą w ROM (LMA), ale adresowane są w PSRAM (VMA) */
     _sidata = LOADADDR(.data);
 
     .data : ALIGN(4)
@@ -40,7 +35,6 @@ SECTIONS
         KEEP(*(.font))
     } > ROM
 
-    /* Zmienne zerowane przy starcie (tylko w PSRAM, nie zajmują miejsca w ROM!) */
     .bss : ALIGN(4)
     {
         _sbss = .;

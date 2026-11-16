@@ -48,6 +48,20 @@ typedef struct {
 #define UART (*(uart_reg_t *)(MMIO_BASE + 0x08))
 #define FB (*(fb_regs_t  *)(MMIO_BASE + 0x0C))
 
+#define REG_TIMER_US (*(volatile uint32_t *)(MMIO_BASE + 0x20))
+#define REG_MTIME_LO (*(volatile uint32_t *)(MMIO_BASE + 0x24))
+#define REG_MTIME_HI (*(volatile uint32_t *)(MMIO_BASE + 0x28))
+
+// avr style (1<<BIOSFLASH_NVSTR) for fast use
+#define BIOSFLASH_NVSTR 20
+#define BIOSFLASH_PROG 19
+#define BIOSFLASH_ERASE 18
+#define BIOSFLASH_SE 17
+#define BIOSFLASH_YE 16
+#define BIOSFLASH_XE 15
+#define BIOSFLASH_CTRL (*(volatile uint32_t *)(MMIO_BASE + 0x14))  // [20]nvstr [19]prog [18]erase [17]se [16]ye [15]xe [14:6]xadr [5:0]yadr
+#define BIOSFLASH_DOUT (*(volatile uint32_t *)(MMIO_BASE + 0x18))
+#define BIOSFLASH_DIN (*(volatile uint32_t *)(MMIO_BASE + 0x1C))
 
 #define FONT_ROM ((const uint8_t *)0x80001000UL)
 #define FB_BASE 0x007C0000UL
@@ -68,23 +82,8 @@ typedef struct {
 #define COLOR_CYAN    0x07FF
 #define COLOR_MAGENTA 0xF81F
 
-#define FONT_ROM ((const uint8_t *)0x80001000UL)
-
-void fb_putc(int x, int y, char c, uint16_t fg, uint16_t bg);
-
-void fb_puts(int x, int y, const char *s, uint16_t fg, uint16_t bg);
-
-
 static inline void led_set(uint8_t mask) {
     REG_LED = (~mask) & 0x3F;
-}
-
-static inline void fb_putpixel(int x, int y, uint16_t color) {
-    FRAMEBUFFER[y * FB_WIDTH + x] = color;
-}
-
-static inline void fb_wait_vblank(void) {
-    while (FB.line < FB_HEIGHT);
 }
 
 static inline void uart_init(uint16_t baud_div) {
