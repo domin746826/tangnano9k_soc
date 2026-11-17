@@ -13,9 +13,9 @@ Roadmap
 - [x] Memory Arbiter
 - [x] L1 Cache
 - [x] RV32I
-- [ ] UART & some timers
+- [x] UART & some timers
 - [x] LCD/Framebuffer
-- [ ] SD Card support
+- [x] SD Card support
 - [ ] RV32IMAC *in progress - RV32IM done*
 - [ ] Add Zicsr & Zifencei support to RV32IMAC Core
 - [ ] Privileged Modes
