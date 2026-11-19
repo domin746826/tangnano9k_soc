@@ -91,7 +91,7 @@ typedef struct {
 // #define FONT_ROM ((const uint8_t *)0x80001000UL)
 
 void fb_putc(int x, int y, char c, uint16_t fg, uint16_t bg);
-
+void fb_scroll(int num, uint16_t color);
 void fb_puts(int x, int y, char *s, uint16_t fg, uint16_t bg);
 
 
@@ -125,6 +125,8 @@ static inline int uart_getc_nonblock(void) {
     return c;
 }
 
+void print_hex_byte(uint8_t b);
+
 static inline void dcache_flush(void) {
     __asm__ volatile ("fence" ::: "memory");
 }
@@ -135,5 +137,11 @@ static inline void icache_flush(void) {
 
 void fb_hline(int x, int y, int amount, uint16_t color);
 void fillScreen(uint16_t color);
+
+void fb_print(char *str);
+void delay_us(uint32_t del);
+void *memcpy(void *dst, const void *src, unsigned int n);
+void *memset(void *dst, int c, unsigned int n);
+int memcmp(const void *s1, const void *s2, unsigned int n);
 
 #endif // SOC_H
