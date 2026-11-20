@@ -101,6 +101,12 @@ void fb_print(char *str) {
     }
 }
 
+void fb_set_cursor(int x, int y) {
+    print_x = x;
+    print_y = y;
+}
+
+
 void fb_scroll(int num, uint16_t color) {
     if (num <= 0) return;
     if (num >= FB_HEIGHT) {

@@ -139,6 +139,7 @@ void fb_hline(int x, int y, int amount, uint16_t color);
 void fillScreen(uint16_t color);
 
 void fb_print(char *str);
+void fb_set_cursor(int x, int y);
 void delay_us(uint32_t del);
 void *memcpy(void *dst, const void *src, unsigned int n);
 void *memset(void *dst, int c, unsigned int n);
